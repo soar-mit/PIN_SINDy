@@ -1,0 +1,66 @@
+import csv
+import numpy as np
+import matplotlib.pyplot as plt
+from SINDyPySource import theta, dmethods, SINDy
+
+# #import data
+
+x1 = []
+x2= []
+t_data=[]
+with open('sindy_data.csv', newline='') as csvfile:
+    reader = csv.DictReader(csvfile)
+    for row in reader:
+        x1.append(float(row['x1']))
+        x2.append(float(row['x2']))
+        t_data.append(float(row['t']))
+x = np.array([x1, x2])
+t_span = (t_data[0], t_data[-1])
+u0 = [i[0] for i in x]     #[x1, x2]
+t_data = np.array(t_data)
+
+# # create SINDy model
+
+dmethod = dmethods(x, t_data)
+
+theta_instance = theta(x, 2)
+
+sindy = SINDY(dmethod, theta_instance, x)
+
+mod = sindy.model()['model']
+
+sol = sindy.simulate(t_span, u0, t_data)
+sol1 = sol.y[0]
+sol2 = sol.y[1]
+
+# # plot solutions
+
+fig, axes = plt.subplots(1, 4)
+
+axes[0].plot(t_data, x1, label="x1 data - solution ")
+axes[0].plot(t_data, x2, label="x2 data - solution")
+axes[0].legend()
+axes[1].plot(sol.t, sol1, label="x1 sindy - simulated")
+axes[1].plot(sol.t, sol2, label="x2 sindy - simulated")
+axes[1].set_ylim(2, -6)
+axes[1].legend()
+
+#plot derivatives
+
+x1_prime = dmethods([x1], t_data).differential(x1)
+x2_prime = dmethods([x2], t_data).differential(x2)
+
+#compare derivatives at correct time steps.
+
+axes[2].plot(t_data, mod[0], label="x1 sindy (differential)")
+axes[2].plot(t_data, mod[1], label="x2 sindy (differential)")
+axes[2].legend()
+
+
+axes[3].plot(t_data, x1_prime, label="x1 data (differential)")
+axes[3].plot(t_data, x2_prime, label="x2 data (differential)")
+axes[3].legend()
+
+
+
+plt.show()

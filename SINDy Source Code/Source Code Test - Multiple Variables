@@ -1,66 +1,63 @@
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
-from SINDyPySource import theta, dmethods, SINDy
+from scipy import integrate
+from SINDyPySource import theta, dmethods, SINDY
 
-# #import data
+# #create toy problem:
 
-x1 = []
-x2= []
-t_data=[]
-with open('sindy_data.csv', newline='') as csvfile:
-    reader = csv.DictReader(csvfile)
-    for row in reader:
-        x1.append(float(row['x1']))
-        x2.append(float(row['x2']))
-        t_data.append(float(row['t']))
-x = np.array([x1, x2])
-t_span = (t_data[0], t_data[-1])
-u0 = [i[0] for i in x]     #[x1, x2]
-t_data = np.array(t_data)
+def f(t, x):
+    #x is list of state variables - in this case [[x1], [x2]]
+    dx1 = -x[0] + x[0]*x[1]
+    dx2 = -x[1]**2
+    return [dx1, dx2]
+
+t = np.linspace(0, 10, 1000)
+x0 = [1, 1]
+tspan = (t[0], t[-1])
+
+x = integrate.solve_ivp(f, tspan, x0, t_eval=t).y
+x1 = np.array(x[0])
+x2 = np.array(x[1])
+
 
 # # create SINDy model
 
-dmethod = dmethods(x, t_data)
+dmethod = dmethods(x, t)
 
 theta_instance = theta(x, 2)
 
-sindy = SINDY(dmethod, theta_instance, x)
-
+sindy = SINDY(dmethod, theta_instance, x, lbd=1e-4)
 mod = sindy.model()['model']
 
-sol = sindy.simulate(t_span, u0, t_data)
+
+sol = sindy.simulate(tspan, x0, t)
 sol1 = sol.y[0]
 sol2 = sol.y[1]
 
-# # plot solutions
+print(sindy.get_coef())
 
-fig, axes = plt.subplots(1, 4)
+# check 1 - plot derivatives:
 
-axes[0].plot(t_data, x1, label="x1 data - solution ")
-axes[0].plot(t_data, x2, label="x2 data - solution")
-axes[0].legend()
-axes[1].plot(sol.t, sol1, label="x1 sindy - simulated")
-axes[1].plot(sol.t, sol2, label="x2 sindy - simulated")
-axes[1].set_ylim(2, -6)
-axes[1].legend()
+x1_prime, x2_prime = dmethod.forward_difference()
 
-#plot derivatives
-
-x1_prime = dmethods([x1], t_data).differential(x1)
-x2_prime = dmethods([x2], t_data).differential(x2)
-
-#compare derivatives at correct time steps.
-
-axes[2].plot(t_data, mod[0], label="x1 sindy (differential)")
-axes[2].plot(t_data, mod[1], label="x2 sindy (differential)")
-axes[2].legend()
+fig, axs = plt.subplots(2, 1)
 
 
-axes[3].plot(t_data, x1_prime, label="x1 data (differential)")
-axes[3].plot(t_data, x2_prime, label="x2 data (differential)")
-axes[3].legend()
+# axs[0].plot(t, x1_prime, label="dmethods x1 prime")
+# axs[0].plot(t, x2_prime, label="dmethods x2 prime")
+
+# axs[1].plot(t, mod[0], label="sindy x1 prime")
+# axs[1].plot(t, mod[1], label="sindy x2 prime")
 
 
+## check 2 - plot actual solution:
 
+axs[0].plot(t, x1, label="original x1")
+axs[0].plot(t, x2, label = "original x2")
+
+axs[1].plot(t, sol1, label="sindy solution x2")
+axs[1].plot(t, sol2, label="sindy solution x2")
+
+plt.legend()
 plt.show()

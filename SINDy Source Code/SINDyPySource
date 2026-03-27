@@ -1,9 +1,7 @@
-import csv
 import numpy as np
 from sklearn.linear_model import Lasso
 import itertools
-from scipy import integrate, differentiate
-import matplotlib.pyplot as plt
+from scipy import integrate
 
 #create theta matrix (feature library of all possible variables)
 class theta:
@@ -41,6 +39,7 @@ class theta:
                 term *= var_list[i]**p[i]
             l.append(term)
             library = np.array(l)
+            library = library[1:, :]
         return library
 
 
@@ -78,13 +77,13 @@ class dmethods:
 # #create STLSQ function
 
 class STLSQ:
-    def __init__(self, diff, theta_lib, lbd=.1):
+    def __init__(self, diff, theta_lib, lbd=1):
         """initializes parameters:
         diff is differential of all state variables.
         lbd: float representing bias penalty.
         feature library: is the list of candidate functions.
         """
-        if lbd <= 0:
+        if lbd < 0:
             raise ValueError("threshold must be a positive number.")
         self.diff = np.array(diff)
         self.lbd = lbd
@@ -94,9 +93,13 @@ class STLSQ:
         """y (list of floats): differential of variables"""
         diff = self.diff
         theta_lib = self.theta_lib
+
         model = Lasso(alpha=self.lbd, fit_intercept=False)
-        coef = model.fit(diff.T, theta_lib.T).coef_
-        return coef.T
+        coef = []
+        for i in range(len(diff)):
+            coef.append(model.fit(theta_lib.T, diff[i]).coef_)
+        return np.array(coef)
+
 
 # #create SINDy function
 
@@ -115,7 +118,7 @@ class SINDY:
         f = self.f
         theta_lib = self.theta_lib
         s = STLSQ(f, theta_lib, self.lbd)
-        coef = s.sparse_regression()
+        coef = s.sparse_regression()   ## looks like [[coef for var1], [coef for var2]]
         model = []
         for i in range(len(coef)):
             model_term = np.dot(theta_lib.T, coef[i])
@@ -136,6 +139,7 @@ class SINDY:
             """function version of library. Takes positional argument y(list of state variable floats, len = # of state variables, time t(float), and np array
             of sparse regression coefs(float np array)
             t is a list of all the time steps in original data."""
+
             theta_vals = []
             for p in pwrs:
                 assert len(p) == len(y), "oops! recalculate theta library."
@@ -144,9 +148,9 @@ class SINDY:
                     term *= y[i]**p[i]
                 theta_vals.append(term)
             theta_vals = np.array(theta_vals)
-            forcing = [np.dot(theta_vals, coef_vector) for coef_vector in coef]
+            theta_vals = theta_vals[1:]
+            forcing = np.array([np.dot(theta_vals, coef_vector) for coef_vector in coef])
             return forcing
 
         sol = integrate.solve_ivp(f, t_span, u0, t_eval = t_data)
         return sol
-

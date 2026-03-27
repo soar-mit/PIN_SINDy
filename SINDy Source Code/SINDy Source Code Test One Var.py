@@ -1,10 +1,6 @@
-import csv
 import numpy as np
-from sklearn.linear_model import Lasso
-import itertools
-from scipy import integrate
 import matplotlib.pyplot as plt
-from SINDyPySource import theta, dmethods, SINDY
+from SINDyPySource import theta, dmethods, SINDY, STLSQ
 import math
 
 
@@ -19,22 +15,36 @@ x = [x]
 
 ## create SINDy Function:
 
-theta_lib = theta(x, 2)
+theta_lib = theta(x, 1)
 dmethod = dmethods(x, t)
 
-sindy = SINDY(dmethod, theta_lib, x, lbd=.05)
+sindy = SINDY(dmethod, theta_lib, x, lbd=1)
 model = sindy.model()
 
 sol1 = model['model']
 
-# graph differentials:
+t_span = (t[0], t[-1])
+u0 = [1]
+sim = (sindy.simulate(t_span, u0, t)).y[0]
 
-xdiff = [3*(math.e)**(3*i) for i in t]
+lib = theta_lib.library()
+diff = dmethod.forward_difference()
 
-plt.plot(t, xdiff, label="x differential")
 
-plt.plot(t, sol1[0], label ="SINDy")
-plt.plot(t, dmethod.forward_difference()[0], label="x1 gradient")
+stlsq = STLSQ(diff, lib)
+
+# graph differentials - test 'passed'
+
+
+# plt.plot(t, sol1[0], label ="SINDy")
+# plt.plot(t, dmethod.forward_difference()[0], label="x1 gradient")
+# plt.legend()
+
+# plt.show()
+
+#graph solution - test 'passed'
+
+plt.plot(t, x[0], label="original data")
+plt.plot(t, sim, label="SINDy Solution")
 plt.legend()
-
 plt.show()

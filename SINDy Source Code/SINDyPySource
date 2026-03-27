@@ -1,3 +1,4 @@
+
 import numpy as np
 from sklearn.linear_model import Lasso
 import itertools
@@ -38,8 +39,10 @@ class theta:
             for i in range(len(var_list)):
                 term *= var_list[i]**p[i]
             l.append(term)
-            library = np.array(l)
-            library = library[1:, :]
+
+        library = np.array(l)
+        library = library[1:, :]
+
         return library
 
 
@@ -77,7 +80,7 @@ class dmethods:
 # #create STLSQ function
 
 class STLSQ:
-    def __init__(self, diff, theta_lib, lbd=1):
+    def __init__(self, diff, theta_lib, lbd):
         """initializes parameters:
         diff is differential of all state variables.
         lbd: float representing bias penalty.
@@ -94,10 +97,15 @@ class STLSQ:
         diff = self.diff
         theta_lib = self.theta_lib
 
+        theta_lib = theta_lib.T
+        norm = np.linalg.norm(theta_lib, axis=0, keepdims=True)
+
+        theta_lib_scaled = theta_lib / norm
+
         model = Lasso(alpha=self.lbd, fit_intercept=False)
         coef = []
         for i in range(len(diff)):
-            coef.append(model.fit(theta_lib.T, diff[i]).coef_)
+            coef.append(model.fit(theta_lib_scaled, diff[i]).coef_ / norm.flatten())
         return np.array(coef)
 
 
@@ -105,7 +113,7 @@ class STLSQ:
 
 class SINDY:
 
-    def __init__(self, dmethod, theta_instance, var_list, lbd=.1):
+    def __init__(self, dmethod, theta_instance, var_list, lbd=.01):
         self.f = dmethod.forward_difference()
         self.theta_lib = theta_instance.library()
         self.var_list = np.array(var_list)
@@ -129,6 +137,10 @@ class SINDY:
         self.coef = coef
         return {'coef': coef, 'model': model }
 
+
+    def get_coef(self):
+        return self.coef
+
     def simulate(self, t_span, u0, t_data):
 
         assert len(self.coef) != 0, "create sindy model first before simulating."
@@ -147,6 +159,7 @@ class SINDY:
                 for i in range(len(p)):
                     term *= y[i]**p[i]
                 theta_vals.append(term)
+
             theta_vals = np.array(theta_vals)
             theta_vals = theta_vals[1:]
             forcing = np.array([np.dot(theta_vals, coef_vector) for coef_vector in coef])

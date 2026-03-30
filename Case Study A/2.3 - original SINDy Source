@@ -1,0 +1,31 @@
+from scipy import integrate
+import numpy as np
+from SINDyPySource import theta, dmethods, SINDY
+
+# create training data:
+def true_forcing(t, x):
+    dx = x[0] + x[1] + .2*x[0]**2
+    dy = -x[0] + .1*x[1] + x[0]*x[1]
+    return [dx, dy]
+
+def prior_forcing(t, x):
+    dx = x[0] + x[1]
+    dy = -x[0]
+    return [dx, dy]
+
+x0 = [2.1, 1]
+
+t = np.linspace(0, 1, 100)
+t_span = (0, 1)
+
+true_sol = integrate.solve_ivp(true_forcing, t_span, x0, t_eval=t)
+x, y = true_sol.y
+trueT = true_sol.t
+X = np.concatenate((x, y))
+
+#create sindy object to train data
+
+dmethod = dmethods(X, t)
+theta_instance = theta(X, 2)
+
+Theta = theta_instance.library()

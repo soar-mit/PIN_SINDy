@@ -1,6 +1,6 @@
 from scipy import integrate
 import numpy as np
-from SINDyPySource import theta, dmethods, SINDY
+from SINDyPySource import theta, dmethods, SINDY, STLSQ
 
 # create training data:
 def true_forcing(t, x):
@@ -15,17 +15,20 @@ def prior_forcing(t, x):
 
 x0 = [2.1, 1]
 
-t = np.linspace(0, 1, 100)
+t = np.linspace(0, 1, 1000)
 t_span = (0, 1)
 
 true_sol = integrate.solve_ivp(true_forcing, t_span, x0, t_eval=t)
 x, y = true_sol.y
 trueT = true_sol.t
-X = np.concatenate((x, y))
+X = np.array((x, y))
 
 #create sindy object to train data
 
 dmethod = dmethods(X, t)
-theta_instance = theta(X, 2)
+diff = dmethod.forward_difference()
 
-Theta = theta_instance.library()
+theta_instance = theta(X, 2)
+stlsq = STLSQ(diff, theta_instance.library())
+
+print(stlsq.sparse_regression(optimal_lbd=True)['coef'])

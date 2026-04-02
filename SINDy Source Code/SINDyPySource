@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.linear_model import Lasso
 import itertools
 from scipy import integrate
+from sklearn.model_selection import GridSearchCV
 
 #create theta matrix (feature library of all possible variables)
 class theta:
@@ -39,7 +40,6 @@ class theta:
             for i in range(len(var_list)):
                 term *= var_list[i]**p[i]
             l.append(term)
-
         library = np.array(l)
         library = library[1:, :]
 
@@ -80,7 +80,7 @@ class dmethods:
 # #create STLSQ function
 
 class STLSQ:
-    def __init__(self, diff, theta_lib, lbd):
+    def __init__(self, diff, theta_lib, lbd=.01):
         """initializes parameters:
         diff is differential of all state variables.
         lbd: float representing bias penalty.
@@ -92,50 +92,78 @@ class STLSQ:
         self.lbd = lbd
         self.theta_lib = theta_lib
 
-    def sparse_regression(self):
+    def sparse_regression(self, optimal_lbd=False):
         """y (list of floats): differential of variables"""
         diff = self.diff
         theta_lib = self.theta_lib
 
         theta_lib = theta_lib.T
         norm = np.linalg.norm(theta_lib, axis=0, keepdims=True)
+        norm[norm==0] = 1
 
         theta_lib_scaled = theta_lib / norm
 
-        model = Lasso(alpha=self.lbd, fit_intercept=False)
-        coef = []
-        for i in range(len(diff)):
-            coef.append(model.fit(theta_lib_scaled, diff[i]).coef_ / norm.flatten())
-        return np.array(coef)
+        if optimal_lbd==True:
+            lbds = np.logspace(-6, 1, 50)
+            model_lbd = Lasso(fit_intercept=False, max_iter=10000)
+            best_lbd= []
+            for i in range(len(diff)):
+                grid = GridSearchCV(model_lbd, param_grid={"alpha":lbds}, cv=5, scoring="neg_mean_squared_error")
+                best_lbd.append(grid.fit(theta_lib_scaled, diff[i]).best_params_["alpha"])
+            coef = []
+            for i in range(len(diff)):
+                model = Lasso(alpha=best_lbd[i], fit_intercept=False)
+                coef.append(model.fit(theta_lib_scaled, diff[i]).coef_ / norm.flatten())
+            return {"lambda":best_lbd, "coef":coef}
+        else:
+            model = Lasso(alpha=self.lbd, fit_intercept=False)
+            coef=[]
+            for i in range(len(diff)):
+                coef.append(model.fit(theta_lib_scaled, diff[i]).coef_ / norm.flatten())
+            return np.array(coef)
+
 
 
 # #create SINDy function
 
 class SINDY:
 
-    def __init__(self, dmethod, theta_instance, var_list, lbd=.01):
+    def __init__(self, dmethod, theta_instance, var_list, lbd=.01, best_lambda=False):
         self.f = dmethod.forward_difference()
         self.theta_lib = theta_instance.library()
         self.var_list = np.array(var_list)
         self.order = theta_instance.get_order()
         self.theta = theta_instance
         self.lbd = lbd
+        self.best_lambda=best_lambda
 
     def model(self):
         """creates differential equation system using sparse regression for state variables."""
         f = self.f
         theta_lib = self.theta_lib
         s = STLSQ(f, theta_lib, self.lbd)
-        coef = s.sparse_regression()   ## looks like [[coef for var1], [coef for var2]]
-        model = []
-        for i in range(len(coef)):
-            model_term = np.dot(theta_lib.T, coef[i])
-            model.append(model_term)
+        if self.best_lambda == False:
+            coef = s.sparse_regression(optimal_lbd=False)   ## looks like [[coef for var1], [coef for var2]]
+            model = []
+            for i in range(len(coef)):
+                model_term = np.dot(theta_lib.T, coef[i])
+                model.append(model_term)
 
-        #update self.coef
-        coef = np.array(coef)
-        self.coef = coef
-        return {'coef': coef, 'model': model }
+            #update self.coef
+            coef = np.array(coef)
+            self.coef = coef
+            return {'coef': coef, 'model': model }
+        else:
+            coef = s.sparse_regression(optimal_lbd=True)['coef']
+            model = []
+            for i in range(len(coef)):
+                model_term = np.dot(theta_lib.T, coef[i])
+                model.append(model_term)
+
+            #update self.coef
+            coef = np.array(coef)
+            self.coef = coef
+            return {'coef': coef, 'model': model }
 
 
     def get_coef(self):
@@ -146,6 +174,9 @@ class SINDY:
         assert len(self.coef) != 0, "create sindy model first before simulating."
         coef = self.coef
         pwrs = self.theta.get_powers()
+        self.t_span = t_span
+        self.u0 = u0
+        self.t_data = t_data
 
         def f(t, y):
             """function version of library. Takes positional argument y(list of state variable floats, len = # of state variables, time t(float), and np array
@@ -165,5 +196,5 @@ class SINDY:
             forcing = np.array([np.dot(theta_vals, coef_vector) for coef_vector in coef])
             return forcing
 
-        sol = integrate.solve_ivp(f, t_span, u0, t_eval = t_data)
+        sol = integrate.solve_ivp(f, t_span, u0, method="LSODA", t_eval = t_data)
         return sol

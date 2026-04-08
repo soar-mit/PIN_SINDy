@@ -1,0 +1,79 @@
+from scipy import integrate
+import numpy as np
+from SINDyPySource import theta, dmethods, SINDY
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
+
+# Goal: generate PIN-SINDy Model for Lotka-Volterra Equations
+
+
+# create training data:
+def true_forcing(t, x):
+    dx = x[0] - x[1]*x[0]
+    dy = -x[1] + x[1]*x[0]
+    return [dx, dy]
+
+def prior_forcing(t, x):
+    dx = x[0] + x[1]
+    dy = -x[0]
+    return [dx, dy]
+
+x0 = [5, 2]
+
+t = np.linspace(0, 10, 10000)
+t_span = (0, 10)
+
+true_sol = integrate.solve_ivp(true_forcing, t_span, x0, method="LSODA", t_eval=t)
+x, y = true_sol.y
+trueT = true_sol.t
+X = np.array((x, y))
+
+#create PIN-sindy object to train data
+
+dmethod = dmethods(X, t)
+diff = dmethod.forward_difference()
+
+theta_instance = theta(X, 2)
+
+fi = [[1, -1], [1, 0], [0, 0], [0, 0], [0, 0]]
+
+lbd_guess = np.logspace(-10, 2, 50)
+x_err = np.inf
+y_err = np.inf
+
+sindy = SINDY(dmethod, theta_instance, X)
+model = sindy.model_pin_sindy(fi)
+sol = sindy.simulate(t_span, x0, t)
+
+best_lbd = sindy.best_lbd(X)
+print(best_lbd['lbd'], best_lbd['diverging_lbds'])
+
+solx, soly = best_lbd['solution']
+
+lbd = best_lbd['lbd']
+## plot results
+fig, axs = plt.subplots(2,1, sharex=True)
+axs[0].plot(t, x, label="observed x")
+axs[0].plot(t, solx, label="pin-sindy x")
+axs[0].legend()
+axs[0].set_ylabel("x")
+
+axs[1].plot(t, y, label="observed y")
+axs[1].plot(t, soly, label="pin-sindy y")
+axs[1].legend()
+axs[1].set_ylabel("y")
+axs[1].set_xlabel("t")
+
+plt.suptitle(f"PIN-SINDY \n lbd={lbd} coefficients: {sindy.get_coef()}")
+plt.tight_layout()
+plt.show()
+
+# plot error
+fig, axs = plt.subplots(1, 2, sharex=True)
+axs[0].plot(t, x-solx, label="x error")
+axs[1].plot(t, y-soly, label="y error")
+plt.title("Error")
+axs[0].legend()
+axs[1].legend()
+plt.tight_layout()
+plt.show()

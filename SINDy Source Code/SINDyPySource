@@ -4,6 +4,7 @@ from sklearn.linear_model import Lasso
 import itertools
 from scipy import integrate
 from sklearn.model_selection import GridSearchCV
+from scipy.signal import savgol_filter
 
 #create theta matrix (feature library of all possible variables)
 class theta:
@@ -64,7 +65,8 @@ class dmethods:
         "returns approximate differentation using central finite difference method."
         "t: list of floats "
         "x: list of floats: one state variable at different times."
-        f = np.gradient(var, self.dt)
+        smooth_var = savgol_filter(var, window_length=11, polyorder=3)
+        f = np.gradient(smooth_var, self.dt)
         return f
 
     def forward_difference(self):
@@ -92,7 +94,7 @@ class STLSQ:
         self.lbd = lbd
         self.theta_lib = theta_lib
 
-    def sparse_regression(self, optimal_lbd=False):
+    def sparse_regression(self):
         """y (list of floats): differential of variables"""
         diff = self.diff
         theta_lib = self.theta_lib
@@ -103,24 +105,36 @@ class STLSQ:
 
         theta_lib_scaled = theta_lib / norm
 
-        if optimal_lbd==True:
-            lbds = np.logspace(-6, 1, 50)
-            model_lbd = Lasso(fit_intercept=False, max_iter=10000)
-            best_lbd= []
-            for i in range(len(diff)):
-                grid = GridSearchCV(model_lbd, param_grid={"alpha":lbds}, cv=5, scoring="neg_mean_squared_error")
-                best_lbd.append(grid.fit(theta_lib_scaled, diff[i]).best_params_["alpha"])
-            coef = []
-            for i in range(len(diff)):
-                model = Lasso(alpha=best_lbd[i], fit_intercept=False)
-                coef.append(model.fit(theta_lib_scaled, diff[i]).coef_ / norm.flatten())
-            return {"lambda":best_lbd, "coef":coef}
-        else:
-            model = Lasso(alpha=self.lbd, fit_intercept=False)
-            coef=[]
-            for i in range(len(diff)):
-                coef.append(model.fit(theta_lib_scaled, diff[i]).coef_ / norm.flatten())
-            return np.array(coef)
+        model = Lasso(alpha=self.lbd, fit_intercept=False)
+        coef=[]
+        for i in range(len(diff)):
+            coef.append(model.fit(theta_lib_scaled, diff[i]).coef_ / norm.flatten())
+        coef = np.array(coef)
+        # coef[coef<= 1e-3] = 0
+        return coef
+
+    def sparse_regression_pin(self, fi):
+        """"fi (matrix, num_state_variables x num_potential_functions: coefficients from prior equations"""
+        fi = np.array(fi)
+        diff = self.diff
+        theta_lib = self.theta_lib
+
+        theta_lib = theta_lib.T
+        fi = fi.T
+
+        #normalize
+        # norm = np.linalg.norm(theta_lib, axis=0, keepdims=True)
+        # norm[norm==0] = 1
+        # theta_lib_scaled = theta_lib / norm
+
+
+        model = Lasso(alpha=self.lbd, fit_intercept=False)
+        coef=[]
+        for i in range(len(diff)):
+            coef.append(model.fit(theta_lib, diff[i]-(theta_lib@fi.T).T[i]).coef_)
+        coef = np.array(coef)
+        # coef[coef<= 1e-3] = 0
+        return coef
 
 
 
@@ -128,46 +142,49 @@ class STLSQ:
 
 class SINDY:
 
-    def __init__(self, dmethod, theta_instance, var_list, lbd=.01, best_lambda=False):
+    def __init__(self, dmethod, theta_instance, var_list, lbd=.01):
         self.f = dmethod.forward_difference()
         self.theta_lib = theta_instance.library()
         self.var_list = np.array(var_list)
         self.order = theta_instance.get_order()
         self.theta = theta_instance
         self.lbd = lbd
-        self.best_lambda=best_lambda
 
     def model(self):
         """creates differential equation system using sparse regression for state variables."""
         f = self.f
         theta_lib = self.theta_lib
         s = STLSQ(f, theta_lib, self.lbd)
-        if self.best_lambda == False:
-            coef = s.sparse_regression(optimal_lbd=False)   ## looks like [[coef for var1], [coef for var2]]
-            model = []
-            for i in range(len(coef)):
-                model_term = np.dot(theta_lib.T, coef[i])
-                model.append(model_term)
+        coef = s.sparse_regression()   ## looks like [[coef for var1], [coef for var2]]
+        model = []
+        for i in range(len(coef)):
+            model_term = np.dot(theta_lib.T, coef[i])
+            model.append(model_term)
 
-            #update self.coef
-            coef = np.array(coef)
-            self.coef = coef
-            return {'coef': coef, 'model': model }
-        else:
-            coef = s.sparse_regression(optimal_lbd=True)['coef']
-            model = []
-            for i in range(len(coef)):
-                model_term = np.dot(theta_lib.T, coef[i])
-                model.append(model_term)
+        #update self.coef
+        coef = np.array(coef)
+        self.coef = coef
+        return {'coef': coef, 'model': model }
 
-            #update self.coef
-            coef = np.array(coef)
-            self.coef = coef
-            return {'coef': coef, 'model': model }
+    def model_pin_sindy(self, fi):
+        """creates differential equation system using sparse regression for state variables."""
+        f = self.f
+        theta_lib = self.theta_lib
+        s = STLSQ(f, theta_lib, self.lbd)
+        coef = s.sparse_regression_pin(fi)   ## looks like [[coef for var1], [coef for var2]]
+        model = []
+        for i in range(len(coef)):
+            model_term = np.dot(theta_lib.T, coef[i])
+            model.append(model_term)
 
+        #update self.coef
+        coef = np.array(coef)
+        self.coef = coef
+        return {'coef': coef, 'model': model }
 
     def get_coef(self):
         return self.coef
+
 
     def simulate(self, t_span, u0, t_data):
 
@@ -195,6 +212,10 @@ class SINDY:
             theta_vals = theta_vals[1:]
             forcing = np.array([np.dot(theta_vals, coef_vector) for coef_vector in coef])
             return forcing
+
+        sol = integrate.solve_ivp(f, t_span, u0, method="LSODA", t_eval = t_data)
+        return sol
+
 
         sol = integrate.solve_ivp(f, t_span, u0, method="LSODA", t_eval = t_data)
         return sol

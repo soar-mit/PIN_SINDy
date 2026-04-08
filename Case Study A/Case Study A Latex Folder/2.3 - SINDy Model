@@ -1,6 +1,8 @@
 from scipy import integrate
 import numpy as np
-from SINDyPySource import theta, dmethods, SINDY, STLSQ
+from SINDyPySource import theta, dmethods, SINDY
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
 
 # create training data:
 def true_forcing(t, x):
@@ -18,7 +20,7 @@ x0 = [2.1, 1]
 t = np.linspace(0, 1, 1000)
 t_span = (0, 1)
 
-true_sol = integrate.solve_ivp(true_forcing, t_span, x0, t_eval=t)
+true_sol = integrate.solve_ivp(true_forcing, t_span, x0, method="LSODA", t_eval=t)
 x, y = true_sol.y
 trueT = true_sol.t
 X = np.array((x, y))
@@ -29,6 +31,72 @@ dmethod = dmethods(X, t)
 diff = dmethod.forward_difference()
 
 theta_instance = theta(X, 2)
+
+sindy = SINDY(dmethod, theta_instance, X, lbd=.0045)
+model = sindy.model()
+sol = sindy.simulate(t_span, x0, t)
+if not sol.success:
+    raise RuntimeError
+else:
+    solx, soly = sol.y
+    print(sindy.get_coef())
+
+#find model with the best lambda:
+
+
+def best_lbd():
+    lbd_guess = np.logspace(-10, 1, 50)
+    min_err = np.inf
+    lbd_opt = 0
+    divergence = []
+    inequal_shapes = 0
+    for lbd in lbd_guess:
+        sindy = SINDY(dmethod, theta_instance, X, lbd=lbd)
+        model = sindy.model()
+        sol = sindy.simulate(t_span, x0, t)
+        if sol.success==True:
+            solx, soly = sol.y
+            if np.any(np.abs(solx) > 1e6) or np.any(np.abs(soly)>1e6):
+                divergence.append(lbd)
+                continue
+            else:
+                if np.shape(x) != np.shape(solx) or np.shape(y) != np.shape(soly):
+                    inequal_shapes+= 1
+                    continue
+                else:
+                    x_err = np.mean((x - solx)**2)
+                    y_err = np.mean((y - soly)**2)
+                    total_err = x_err + y_err
+                    if total_err < min_err:
+                        min_err = total_err
+                        lbd_opt = lbd
+    print(f'minimum error: {min_err}, optimal lambda: {lbd_opt}, inequal shapes= {inequal_shapes}, diverging lambdas = {divergence}')
+    return{'minimum error': {min_err}, 'optimal_lbd': {lbd_opt}, 'inequal_shapes': {inequal_shapes}, 'diverging_lbds': {divergence}}
+
+
+
+
+
+
+#plot comparable solution
+
+
+fig, axs = plt.subplots(1, 2)
+axs[0].plot(t, x, label="true x")
+axs[0].plot(t, solx, label="sindy x")
+axs[0].set_xlabel("t")
+axs[0].set_ylabel("position")
+axs[0].legend()
+
+axs[1].plot(t, y, label="true y")
+axs[1].plot(t, soly, label="sindy y")
+axs[1].set_xlabel("t")
+axs[1].set_ylabel("position")
+axs[1].legend()
+
+plt.suptitle(f"Pure SINDy vs. True equations \n coefficients: {sindy.get_coef()} ")
+plt.tight_layout()
+plt.show()
 stlsq = STLSQ(diff, theta_instance.library())
 
 print(stlsq.sparse_regression(optimal_lbd=True)['coef'])

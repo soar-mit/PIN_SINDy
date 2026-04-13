@@ -186,7 +186,7 @@ class SINDY:
     def get_coef(self):
         for e in self.coef:
             for i in range(len(e)):
-                e[i] = round(e[i], 2)
+                e[i] = round(e[i], 4)
         return self.coef
 
 
@@ -221,9 +221,9 @@ class SINDY:
         return sol
 
 
-    def best_lbd(self, X):
+    def best_lbd(self, X, true_coef):
         x, y = X
-        lbd_guess = np.logspace(-10, 1, 50)
+        lbd_guess = np.logspace(-6, 1, 50)
         min_err = np.inf
         lbd_opt = 0
         divergence = []
@@ -231,25 +231,14 @@ class SINDY:
         for lbd in lbd_guess:
             sindy = SINDY(self.dmethod, self.theta, self.var_list, lbd=lbd)
             model = sindy.model()
-            sol = sindy.simulate(self.t_span, self.u0, self.t_data)
-            if sol.success==True:
-                solx, soly = sol.y
-                if np.any(np.abs(solx) > 1e6) or np.any(np.abs(soly)>1e6):
-                    divergence.append(lbd)
-                    continue
-                else:
-                    if np.shape(x) != np.shape(solx) or np.shape(y) != np.shape(soly):
-                        inequal_shapes+= 1
-                        continue
-                    else:
-                        x_err = np.mean((x - solx)**2)
-                        y_err = np.mean((y - soly)**2)
-                        total_err = x_err + y_err
-                        if total_err < min_err:
-                            min_err = total_err
-                            lbd_opt = lbd
+            coef_sindy = sindy.get_coef()
+            coef_err = np.mean((true_coef-coef_sindy)**2)
+            if coef_err < min_err:
+                min_err = coef_err
+                lbd_opt = lbd
         final_sindy = SINDY(self.dmethod, self.theta, self.var_list, lbd=lbd_opt)
-        final_modle = final_sindy.model()
+        final_model = final_sindy.model()
         final_sol = final_sindy.simulate(self.t_span, self.u0, self.t_data).y
-        return {'minimum error': min_err, 'lbd': lbd_opt, 'inequal_shapes': inequal_shapes, 'diverging_lbds': divergence, 'solution': final_sol}
+        return {'model':final_model, 'minimum error': min_err, 'lbd': lbd_opt, 'inequal_shapes': inequal_shapes, 'diverging_lbds': divergence, 'solution': final_sol}
+
 

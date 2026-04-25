@@ -3,6 +3,7 @@ import numpy as np
 from SINDyPySource import theta, dmethods, SINDY
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
+from matplotlib.gridspec import GridSpec
 
 # Goal: generate PIN-SINDy Model for Lotka-Volterra Equations
 
@@ -14,21 +15,62 @@ def true_forcing(t, x):
     return [dx, dy]
 
 def prior_forcing(t, x):
-    dx = x[0] + x[1]
-    dy = -x[0]
+    dx = x[0] + x[1]*x[0]
+    dy = x[1] + x[1]*x[0]
     return [dx, dy]
+
+
+
+
 
 fi = [[1, 0], [0, 1], [0, 0], [1, 1], [0, 0]]
 
 x0 = [5, 2]
 
-t = np.linspace(0, 20, 20000)
-t_span = (0, 20)
+t = np.linspace(0, 5, 5000)
+t_span = (0, 5)
 
 true_sol = integrate.solve_ivp(true_forcing, t_span, x0, method="LSODA", t_eval=t)
 x, y = true_sol.y
 trueT = true_sol.t
 X = np.array((x, y))
+
+
+#plot true vs prior equations
+
+# prior_sol = integrate.solve_ivp(prior_forcing, t_span, x0, t_eval=t)
+# priorX, priorY = prior_sol.y
+# priorT = prior_sol.t
+
+# plt.rcParams["font.family"] = "serif"
+
+# fig = plt.figure()
+# axs = GridSpec(2, 2, width_ratios=[1, 1])
+# axs1 = fig.add_subplot(axs[0, 1])
+# axs2= fig.add_subplot(axs[1, 1], sharex=axs1)
+# axs3 = fig.add_subplot(axs[:, 0])
+
+
+# axs1.plot(trueT, x, 'k-', label='true equations')
+# axs1.plot(priorT, priorX, 'b-', label='prior equations')
+# axs1.set_ylabel("x")
+
+# axs2.plot(trueT, y, 'k-')
+# axs2.plot(priorT, priorY, 'b-')
+# axs2.set_ylabel("y")
+
+
+# fig.supxlabel("t")
+
+# axs3.plot(x, y, 'k-', label="true equations")
+# axs3.plot(priorX, priorY, 'b-', label="prior equations")
+# axs3.set_ylabel("y")
+# axs3.set_xlabel("x")
+
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
+
 
 #create PIN-sindy object to train data
 
@@ -45,26 +87,30 @@ sindy = SINDY(dmethod, theta_instance, X)
 model = sindy.model_pin_sindy(fi)
 sol = sindy.simulate(t_span, x0, t)
 
-best_lbd = sindy.best_lbd(X)
+
+true_coef = np.array([[-3/10, 0, 0, -3/2, 0], [0, -13/10, 0, -9/10, 0]])
+best_lbd = sindy.best_lbd(X, true_coef)
 print(best_lbd['lbd'], best_lbd['diverging_lbds'])
 
 solx, soly = best_lbd['solution']
 
 lbd = best_lbd['lbd']
+
+
 ## plot results
 fig, axs = plt.subplots(2,1, sharex=True)
-axs[0].plot(t, x, label="observed x")
+axs[0].plot(t, x, linestyle="dashed", label="observed x")
 axs[0].plot(t, solx, label="pin-sindy x")
 axs[0].legend()
 axs[0].set_ylabel("x")
 
-axs[1].plot(t, y, label="observed y")
+axs[1].plot(t, y, linestyle="dashed", label="observed y")
 axs[1].plot(t, soly, label="pin-sindy y")
 axs[1].legend()
 axs[1].set_ylabel("y")
 axs[1].set_xlabel("t")
 
-plt.suptitle(f"PIN-SINDY \n lbd={lbd} coefficients: {sindy.get_coef()}")
+plt.suptitle(f"PIN-SINDY \n lbd={lbd: .2e} coefficients: {sindy.get_coef()}")
 plt.tight_layout()
 plt.show()
 

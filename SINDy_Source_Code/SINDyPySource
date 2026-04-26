@@ -240,5 +240,3 @@ class SINDY:
         final_model = final_sindy.model()
         final_sol = final_sindy.simulate(self.t_span, self.u0, self.t_data).y
         return {'model':final_model, 'minimum error': min_err, 'lbd': lbd_opt, 'inequal_shapes': inequal_shapes, 'diverging_lbds': divergence, 'solution': final_sol}
-
-

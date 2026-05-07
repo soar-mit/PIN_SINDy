@@ -1,3 +1,13 @@
+from scipy import integrate
+import numpy as np
+# from SINDyPySource import theta, dmethods, SINDY  # fix this later.
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
+
+# Goal: generate SINDy Model for Lotka-Volterra Equations
+
+# Source Code:
+
 
 import numpy as np
 from sklearn.linear_model import Lasso
@@ -5,7 +15,7 @@ import itertools
 from scipy import integrate
 from scipy.signal import savgol_filter
 
-#create theta matrix (feature library of all possible variables)
+#Source Functions (figure out how to import later)
 class theta:
     def __init__(self, var_list, order):
         self.var_list = np.array(var_list)
@@ -44,12 +54,6 @@ class theta:
         library = library[1:, :]
 
         return library
-
-
-
-
-# #create differentation method
-
 class dmethods:
 
     def __init__(self, x, t):
@@ -76,10 +80,6 @@ class dmethods:
             f.append(self.differential(var))
         f = np.array(f)
         return f
-
-
-# #create STLSQ function
-
 class STLSQ:
     def __init__(self, diff, theta_lib, lbd=.01):
         """initializes parameters:
@@ -134,11 +134,6 @@ class STLSQ:
         coef = np.array(coef)
         # coef[coef<= 1e-3] = 0
         return coef
-
-
-
-# #create SINDy function
-
 class SINDY:
 
     def __init__(self, dmethod, theta_instance, var_list, lbd=.01):
@@ -239,3 +234,73 @@ class SINDY:
         final_model = final_sindy.model()
         final_sol = final_sindy.simulate(self.t_span, self.u0, self.t_data).y
         return {'model':final_model, 'minimum error': min_err, 'lbd': lbd_opt, 'inequal_shapes': inequal_shapes, 'diverging_lbds': divergence, 'solution': final_sol}
+
+
+# create training data:
+def true_forcing(t, x):
+    dx = .7*x[0] - .5*x[1]*x[0]
+    dy = -.3*x[1] + .1*x[1]*x[0]
+    return [dx, dy]
+
+def prior_forcing(t, x):
+    dx = x[0] + x[1]
+    dy = -x[0]
+    return [dx, dy]
+
+x0 = [5, 2]
+
+t = np.linspace(0, 5, 5000)
+t_span = (0, 5)
+
+true_sol = integrate.solve_ivp(true_forcing, t_span, x0, method="LSODA", t_eval=t)
+x, y = true_sol.y
+trueT = true_sol.t
+X = np.array((x, y))
+
+#create PIN-sindy object to train data
+
+dmethod = dmethods(X, t)
+diff = dmethod.forward_difference()
+
+theta_instance = theta(X, 2)
+
+sindy = SINDY(dmethod, theta_instance, X)
+model = sindy.model()
+sol = sindy.simulate(t_span, x0, t)
+
+
+
+true_coef = np.array([[7/10, 0, 0, -1/2, 0], [0, -3/10, 0, 1/10, 0]])
+best_lbd = sindy.best_lbd(X, true_coef)
+print(best_lbd['lbd'], best_lbd['diverging_lbds'])
+
+solx, soly = best_lbd['solution']
+
+lbd = best_lbd['lbd']
+## plot results
+fig, axs = plt.subplots(2,1, sharex=True)
+axs[0].plot(t, x, linestyle="dashed", label="observed x")
+axs[0].plot(t, solx, label="pure sindy x")
+axs[0].legend()
+axs[0].set_ylabel("x")
+
+axs[1].plot(t, y, linestyle="dashed", label="observed y")
+axs[1].plot(t, soly, label=" pure sindy y")
+axs[1].legend()
+axs[1].set_ylabel("y")
+axs[1].set_xlabel("t")
+
+plt.suptitle(f"Pure SINDY \n lbd={lbd: .2e} coefficients: {sindy.get_coef()}")
+plt.tight_layout()
+plt.show()
+
+# plot error
+fig, axs = plt.subplots(1, 2, sharex=True)
+axs[0].plot(t, x-solx, label="x error")
+axs[1].plot(t, y-soly, label="y error")
+plt.legend()
+plt.tight_layout()
+plt.show()
+axs[1].plot(t, y-soly, label="y error")
+plt.tight_layout()
+plt.show()

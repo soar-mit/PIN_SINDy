@@ -1,11 +1,14 @@
-
+from scipy import integrate
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.linear_model import Lasso
 import itertools
-from scipy import integrate
 from scipy.signal import savgol_filter
+from matplotlib.gridspec import GridSpec
 
-#create theta matrix (feature library of all possible variables)
+# Goal: generate PIN-SINDy Model for Lotka-Volterra Equations
+
+#source code (figure out how to import later):
 class theta:
     def __init__(self, var_list, order):
         self.var_list = np.array(var_list)
@@ -44,12 +47,6 @@ class theta:
         library = library[1:, :]
 
         return library
-
-
-
-
-# #create differentation method
-
 class dmethods:
 
     def __init__(self, x, t):
@@ -76,11 +73,8 @@ class dmethods:
             f.append(self.differential(var))
         f = np.array(f)
         return f
-
-
-# #create STLSQ function
-
 class STLSQ:
+
     def __init__(self, diff, theta_lib, lbd=.01):
         """initializes parameters:
         diff is differential of all state variables.
@@ -109,7 +103,6 @@ class STLSQ:
         for i in range(len(diff)):
             coef.append(model.fit(theta_lib_scaled, diff[i]).coef_ / norm.flatten())
         coef = np.array(coef)
-        # coef[coef<= 1e-3] = 0
         return coef
 
     def sparse_regression_pin(self, fi):
@@ -119,25 +112,14 @@ class STLSQ:
         theta_lib = self.theta_lib
 
         theta_lib = theta_lib.T
-        fi = fi.T
-
-        #normalize
-        # norm = np.linalg.norm(theta_lib, axis=0, keepdims=True)
-        # norm[norm==0] = 1
-        # theta_lib_scaled = theta_lib / norm
-
 
         model = Lasso(alpha=self.lbd, fit_intercept=False)
         coef=[]
         for i in range(len(diff)):
-            coef.append(model.fit(theta_lib, diff[i]-(theta_lib@fi.T).T[i]).coef_)
+            coef.append(model.fit(theta_lib, diff[i] - (theta_lib @ fi)[:, i]).coef_)
         coef = np.array(coef)
-        # coef[coef<= 1e-3] = 0
+
         return coef
-
-
-
-# #create SINDy function
 
 class SINDY:
 
@@ -171,21 +153,22 @@ class SINDY:
         f = self.f
         theta_lib = self.theta_lib
         s = STLSQ(f, theta_lib, self.lbd)
-        coef = s.sparse_regression_pin(fi)   ## looks like [[coef for var1], [coef for var2]]
+        correction_coef = s.sparse_regression_pin(fi)   # looks like [[coef for var1], [coef for var2]]
+        final_coef = correction_coef + np.array(fi).T
+
         model = []
-        for i in range(len(coef)):
-            model_term = np.dot(theta_lib.T, coef[i])
+        for i in range(len(final_coef)):
+            model_term = np.dot(theta_lib.T, final_coef[i])
             model.append(model_term)
 
         #update self.coef
-        coef = np.array(coef)
-        self.coef = coef
-        return {'coef': coef, 'model': model }
+        self.coef = final_coef
+        return {'coef': final_coef, 'model': model }
 
     def get_coef(self):
         for e in self.coef:
             for i in range(len(e)):
-                e[i] = round(e[i], 4)
+                e[i] = round(e[i], 2)
         return self.coef
 
 
@@ -231,11 +214,132 @@ class SINDY:
             sindy = SINDY(self.dmethod, self.theta, self.var_list, lbd=lbd)
             model = sindy.model()
             coef_sindy = sindy.get_coef()
-            coef_err = np.mean((true_coef-coef_sindy)**2)
+            coef_err = np.mean((true_coef.T-coef_sindy)**2)
             if coef_err < min_err:
                 min_err = coef_err
                 lbd_opt = lbd
         final_sindy = SINDY(self.dmethod, self.theta, self.var_list, lbd=lbd_opt)
         final_model = final_sindy.model()
         final_sol = final_sindy.simulate(self.t_span, self.u0, self.t_data).y
-        return {'model':final_model, 'minimum error': min_err, 'lbd': lbd_opt, 'inequal_shapes': inequal_shapes, 'diverging_lbds': divergence, 'solution': final_sol}
+        return {'model':final_model, 'min_err': min_err, 'lbd': lbd_opt, 'inequal_shapes': inequal_shapes, 'diverging_lbds': divergence, 'sol': final_sol}
+
+# determine what output you would like to see:
+plot_error = False
+plot_results = True
+plot_true_vs_prior = False
+
+# create training data:
+def true_forcing(t, x):
+    dx = x[0] - x[1]*x[0]
+    dy = -x[1] + x[1]*x[0]
+    return [dx, dy]
+
+def prior_forcing(t, x):
+    dx = x[0] - x[1]*x[0]
+    dy = - x[1] + x[1]*x[0]
+    return [dx, dy]
+
+
+
+true_coef = np.array([[1, 0], [0, 1], [0, 0], [1, 1], [0, 0]])
+fi = np.array([[1, 0], [0, 1], [0, 0], [1, 1], [0, 0]])
+
+x0 = [5, 2]
+
+t = np.linspace(0, 5, 5000)
+t_span = (0, 5)
+
+true_sol = integrate.solve_ivp(true_forcing, t_span, x0, method="LSODA", t_eval=t)
+x, y = true_sol.y
+trueT = true_sol.t
+X = np.array((x, y))
+
+
+#plot true vs prior equations
+if plot_true_vs_prior:
+    prior_sol = integrate.solve_ivp(prior_forcing, t_span, x0, t_eval=t)
+    priorX, priorY = prior_sol.y
+    priorT = prior_sol.t
+
+    plt.rcParams["font.family"] = "serif"
+
+    fig = plt.figure()
+    axs = GridSpec(2, 2, width_ratios=[1, 1])
+    axs1 = fig.add_subplot(axs[0, 1])
+    axs2= fig.add_subplot(axs[1, 1], sharex=axs1)
+    axs3 = fig.add_subplot(axs[:, 0])
+
+
+    axs1.plot(trueT, x, 'k-', label='true equations')
+    axs1.plot(priorT, priorX, 'b-', label='prior equations')
+    axs1.set_ylabel("x")
+
+    axs2.plot(trueT, y, 'k-')
+    axs2.plot(priorT, priorY, 'b-')
+    axs2.set_ylabel("y")
+
+
+    fig.supxlabel("t")
+
+    axs3.plot(x, y, 'k-', label="true equations")
+    axs3.plot(priorX, priorY, 'b-', label="prior equations")
+    axs3.set_ylabel("y")
+    axs3.set_xlabel("x")
+
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+#create PIN-sindy object to train data
+
+dmethod = dmethods(X, t)
+diff = dmethod.forward_difference()
+
+theta_instance = theta(X, 2)
+
+lbd_guess = np.logspace(-10, 2, 50)
+x_err = np.inf
+y_err = np.inf
+
+stlsq = STLSQ(diff, theta_instance.library())
+
+sindy = SINDY(dmethod, theta_instance, X)
+model = sindy.model_pin_sindy(fi)
+sol = sindy.simulate(t_span, x0, t)
+
+best_lbd = sindy.best_lbd(X, true_coef)
+
+solx, soly = best_lbd['sol']
+
+lbd = best_lbd['lbd']
+
+
+## plot results
+if plot_results:
+    fig, axs = plt.subplots(2,1, sharex=True)
+    axs[0].plot(t, x, linestyle="dashed", label="observed x")
+    axs[0].plot(t, solx, label="pin-sindy x")
+    axs[0].legend()
+    axs[0].set_ylabel("x")
+
+    axs[1].plot(t, y, linestyle="dashed", label="observed y")
+    axs[1].plot(t, soly, label="pin-sindy y")
+    axs[1].legend()
+    axs[1].set_ylabel("y")
+    axs[1].set_xlabel("t")
+
+    plt.suptitle(f"PIN-SINDY \n lbd={lbd: .2e} coefficients: {sindy.get_coef()}")
+    plt.tight_layout()
+    plt.show()
+
+# plot error
+if plot_error:
+    fig, axs = plt.subplots(1, 2, sharex=True)
+    axs[0].plot(t, x-solx, label="x error")
+    axs[1].plot(t, y-soly, label="y error")
+    plt.title("Error")
+    axs[0].legend()
+    axs[1].legend()
+    plt.tight_layout()
+    plt.show()

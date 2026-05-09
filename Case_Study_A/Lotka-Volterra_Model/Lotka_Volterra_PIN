@@ -1,3 +1,4 @@
+from matplotlib.pylab import norm
 from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,7 +14,6 @@ class theta:
     def __init__(self, var_list, order):
         self.var_list = np.array(var_list)
         self.order = order
-
     def get_order(self):
         return self.order
 
@@ -33,10 +33,11 @@ class theta:
         pwrs = np.array(pwrs)
         return pwrs.astype(np.float64)
 
-    def library(self):
+    def library(self, scaled=True):
         l = []
         var_list = self.var_list
-        var_list = var_list.astype(np.float64)
+
+        var_list = np.array(var_list).astype(np.float64)
         pwrs = self.get_powers()
         for p in pwrs:
             term = np.ones_like(var_list[0])
@@ -45,6 +46,9 @@ class theta:
             l.append(term)
         library = np.array(l)
         library = library[1:, :]
+
+        if scaled:
+            library = library / np.max(np.abs(library), axis=1, keepdims=True)
 
         return library
 class dmethods:
@@ -61,6 +65,7 @@ class dmethods:
         "returns approximate differentation using central finite difference method."
         "t: list of floats "
         "x: list of floats: one state variable at different times."
+
         smooth_var = savgol_filter(var, window_length=11, polyorder=3)
         f = np.gradient(smooth_var, self.dt)
         return f
@@ -72,6 +77,7 @@ class dmethods:
         for var in x:
             f.append(self.differential(var))
         f = np.array(f)
+        f = np.clip(f, -1e6, 1e6)
         return f
 class STLSQ:
 
@@ -112,11 +118,16 @@ class STLSQ:
         theta_lib = self.theta_lib
 
         theta_lib = theta_lib.T
+        norm = np.linalg.norm(theta_lib, axis=0)
+        norm[norm==0] = 1
+
+        theta_lib_scaled = theta_lib / norm
+        fi_scaled = fi/ norm
 
         model = Lasso(alpha=self.lbd, fit_intercept=False)
         coef=[]
         for i in range(len(diff)):
-            coef.append(model.fit(theta_lib, diff[i] - (theta_lib @ fi)[:, i]).coef_)
+            coef.append(model.fit(theta_lib_scaled, diff[i] - (theta_lib_scaled @ fi_scaled.T)[:, i]).coef_)
         coef = np.array(coef)
 
         return coef
@@ -137,7 +148,7 @@ class SINDY:
         f = self.f
         theta_lib = self.theta_lib
         s = STLSQ(f, theta_lib, self.lbd)
-        coef = s.sparse_regression()   ## looks like [[coef for var1], [coef for var2]]
+        coef = s.sparse_regression()
         model = []
         for i in range(len(coef)):
             model_term = np.dot(theta_lib.T, coef[i])
@@ -152,13 +163,22 @@ class SINDY:
         """creates differential equation system using sparse regression for state variables."""
         f = self.f
         theta_lib = self.theta_lib
+
+        theta_lib = theta_lib.T
+        norm = np.linalg.norm(theta_lib, axis=0)
+        norm[norm==0] = 1
+        self.norm = norm
+
+        theta_lib_scaled = theta_lib / norm
+        fi_scaled = fi/norm
+
         s = STLSQ(f, theta_lib, self.lbd)
         correction_coef = s.sparse_regression_pin(fi)   # looks like [[coef for var1], [coef for var2]]
-        final_coef = correction_coef + np.array(fi).T
+        final_coef = correction_coef + np.array(fi_scaled)
 
         model = []
         for i in range(len(final_coef)):
-            model_term = np.dot(theta_lib.T, final_coef[i])
+            model_term = np.dot(theta_lib_scaled.T, final_coef[i])
             model.append(model_term)
 
         #update self.coef
@@ -196,7 +216,12 @@ class SINDY:
 
             theta_vals = np.array(theta_vals)
             theta_vals = theta_vals[1:]
-            forcing = np.array([np.dot(theta_vals, coef_vector) for coef_vector in coef])
+
+            #normalize theta_vals the same way as library
+            theta_vals = theta_vals.T
+            theta_vals_scaled = theta_vals / self.norm.flatten()
+
+            forcing = np.array([np.dot(theta_vals_scaled, coef_vector) for coef_vector in coef])
             return forcing
 
         sol = integrate.solve_ivp(f, t_span, u0, method="LSODA", t_eval = t_data)
@@ -214,7 +239,7 @@ class SINDY:
             sindy = SINDY(self.dmethod, self.theta, self.var_list, lbd=lbd)
             model = sindy.model()
             coef_sindy = sindy.get_coef()
-            coef_err = np.mean((true_coef.T-coef_sindy)**2)
+            coef_err = np.mean((true_coef - coef_sindy)**2)
             if coef_err < min_err:
                 min_err = coef_err
                 lbd_opt = lbd
@@ -224,14 +249,14 @@ class SINDY:
         return {'model':final_model, 'min_err': min_err, 'lbd': lbd_opt, 'inequal_shapes': inequal_shapes, 'diverging_lbds': divergence, 'sol': final_sol}
 
 # determine what output you would like to see:
-plot_error = False
-plot_results = True
-plot_true_vs_prior = False
+plot_error = False  #plots the error of the SINDy solution over time
+plot_results = False #plots the SINDy solution and the true solution over time.
+plot_true_vs_prior = False #plots the true solution and the prior solution over time.
 
 # create training data:
 def true_forcing(t, x):
-    dx = x[0] - x[1]*x[0]
-    dy = -x[1] + x[1]*x[0]
+    dx = .7*x[0] - .5*x[1]*x[0]
+    dy = -.3*x[1] + .2*x[1]*x[0]
     return [dx, dy]
 
 def prior_forcing(t, x):
@@ -241,8 +266,8 @@ def prior_forcing(t, x):
 
 
 
-true_coef = np.array([[1, 0], [0, 1], [0, 0], [1, 1], [0, 0]])
-fi = np.array([[1, 0], [0, 1], [0, 0], [1, 1], [0, 0]])
+true_coef = np.array([[.7, 0, .03, -.5, 0], [0, -.3, 0, .2, -.02]])
+fi = np.array([[1, 0, 0, -1, 0], [0, -1, 0, 1, 0]])
 
 x0 = [5, 2]
 

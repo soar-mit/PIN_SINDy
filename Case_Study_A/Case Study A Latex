@@ -1,1 +1,264 @@
+\documentclass[11pt]{article}
+
+% -------------------------------
+% Geometry: tunable margins
+% -------------------------------
+\usepackage[
+  top=1in,
+  bottom=1in,
+  left=1in,
+  right=1in
+]{geometry}
+% Adjust the numbers above to tune your margins.
+
+% -------------------------------
+% Fonts & layout niceties
+% -------------------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+
+% -------------------------------
+% Math packages
+% -------------------------------
+\usepackage{amsmath, amssymb, amsfonts, mathtools}
+\usepackage{amsthm}
+\usepackage{bm}           % bold math symbols
+\usepackage{siunitx}      % nice units & numbers
+\numberwithin{equation}{section}
+
+% Theorem-like environments (customize as needed)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% -------------------------------
+% Figures, floats, and graphics
+% -------------------------------
+\usepackage{graphicx}     % includegraphics
+\usepackage{caption}
+\usepackage{subcaption}   % subfigure support
+\usepackage{float}        % [H] float placement
+\graphicspath{{figures/}} % put your figures in ./figures/
+
+% -------------------------------
+% Hyperlinks
+% -------------------------------
+\usepackage[hidelinks]{hyperref}
+
+% -------------------------------
+% Title (no author)
+% -------------------------------
+\title{\vspace{-1.5cm}\textbf{Case Study Specifications for PIN-SINDy}}
+\date{\vspace{-1.2cm}\today}  
+
+% -------------------------------
+% Document
+% -------------------------------
+\begin{document}
+
+\maketitle
+
+
+
+\section{Case Study A: Simple System}
+\noindent
+True Equations:
+\begin{equation}
+\begin{aligned}
+\dot{x} & = .7x - .5xy \\
+\dot{y} &= -.3y + .1xy
+\end{aligned}
+\end{equation}
+Prior Equations:
+\begin{equation}
+\begin{aligned}
+\dot{x} & = x + xy  \\
+\dot{y} &= y
+\end{aligned}
+\end{equation}
+The data consists of $x$ and $y$ values for a simulation that spans from $t=0$ to $t=10$. 
+The $x$ and $y$ are given in intervals of 0.01 to make 1001 data points. 
+The data is generated with an initial position of $x=5$ and $y=2$.
+For all analysis in this section, use up to order 2 monomials, excluding 0-order monomials, as candidate functions. 
+
+\subsection{Case Study A Introduction}
+\begin{enumerate}
+\item Replicate the style and content of Figure \ref{fig:1} for these equations. Look up how to use \LaTeX within matplotlib figures.
+\end{enumerate}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{true vs. prior equations}
+    \caption{Illustration of the true equations used for case study A compared to prior equations}
+    \label{fig:1}
+\end{figure}
+
+
+
+\subsection{Method Setup}
+\begin{enumerate}
+\item As $\bm{\Theta}\left(\bm{\mathrm{X}}\right)$ is independent of whether SINDy or PIN-SINDy is used, list the candidate functions used to make this matrix. \newline 
+\noindent Candidate functions of the polynomial are $x$, $y$,$x^2$, $xy$, and $y^2$. \newline
+
+
+\item Make a table to describe how many rows and columns $\bm{\mathrm{X}}$, $\dot{\bm{\mathrm{X}}}$ and $\bm{\Theta}\left(\bm{\mathrm{X}}\right)$ have.
+\end{enumerate}
+
+
+\noindent The rows and columns of each of these are as follows (n describes the number of time stamps of the positional function): 
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{ccc}
+    \textbf{Matrix Label} & \textbf{Rows} & \textbf{Columns} \\
+        \textbf{$\theta(X)$} & $n$ & $5$\\
+         \textbf{$X$}& $n$ & $2$ \\
+         \textbf{$\dot{X}$} & $n$  & $2$ \\
+    \end{tabular}
+    \caption{Rows and Columns of $\theta(X)$, $X$, and $\dot{X}$}
+    \label{fig 2: table of rows and columns}
+\end{table}
+
+\pagebreak
+
+
+
+\subsection{Comparing $\Xi$}
+\begin{enumerate}
+\item Start with SINDy only. What is the $\bm{\Xi}$ that is needed to ensure the SINDy model perfectly matches the true equations? \newline
+
+The coefficient matrix (or $\Xi$) needed for this function is: \newline
+\centering
+\begin{math}
+\textbf{$\Xi$} = \begin{pmatrix}
+.7 & 0 \\
+0 & -.3 \\
+0 & 0 \\
+-.5 & .1 \\
+0 & 0 \\
+\end{pmatrix}
+\end{math}
+
+
+
+
+
+\item Train a SINDy model. By trial-and-error, try some different $\lambda$ values until you get good agreement with the data. Report the values in $\bm{\Xi}$ and $\lambda$.
+
+The best coefficient matrix for this system using pure SINDy is: \newline
+
+\centering
+\begin{math}
+\textbf{$\Xi$} = \begin{pmatrix}
+0 & 0 \\
+0.11 & -.28 \\
+0.06 & 0 \\
+-0.33 & 0.2 \\
+-0.03 & -0.01 \\
+\end{pmatrix}
+\end{math}
+
+\newline lambda is $1.00 * 10^{-6}$
+
+Pure SINDy model: 
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\linewidth]{Pure SINDy}
+    \caption{Pure SINDy model when compared with original data}
+    \label{fig:2}
+\end{figure}
+\item Now, move on to PIN-SINDy. What is $\bm{\Phi}$?
+\newline prior matrix $\bm{\Phi}$ is: \newline
+
+\centering
+\begin{math}
+\textbf{$\Phi$} = \begin{pmatrix}
+1 & 0 \\
+0 & -1 \\
+0 & 0 \\
+-1 & 0 \\
+0 & 0 \\
+\end{pmatrix}
+\end{math}
+
+
+\item With this $\bm{\Phi}$, what is the new $\bm{\Xi}$ that is needed to ensure the PIN-SINDy model perfectly matches the true equations?
+
+\newline Updated $\bm{\Xi}$ matrix is: 
+
+\centering
+\begin{math}
+\textbf{$\Xi$} = \begin{pmatrix}
+-.3 & 0 \\
+0 & -1.3 \\
+0 & 0 \\
+-1.5 & .1 \\
+0 & 0 \\
+\end{pmatrix}
+\end{math}
+
+\item How does the $\bm{\Xi}$ calculated in part 1 for SINDy relate to $\bm{\Xi}$ and $\bm{\Phi}$ for PIN-SINDy.
+
+\newline $\bm{\Xi}_{sindy} =  \bm{\Xi}_{pin} + \bm{\Phi}$
+
+\item Train a PIN-SINDy model. By trial-and-error, try some different $\lambda$ values until you get good agreement with the data. Report the values in $\bm{\Xi}$ and $\lambda$.
+
+\newline The best coefficient matrix for this system using PIN-SINDy is: \newline
+
+\centering
+\begin{math}
+\textbf{$\Xi$} = \begin{pmatrix}
+1 & 0 \\
+-.02 & -.33 \\
+-0.03 & -.01 \\
+-0.57 & 0.19\\
+0 & 0.01 \\
+\end{pmatrix}
+\end{math}
+
+\newline lambda is $1.00*10^{-6}$
+
+\newline Results from PIN-SINDy model look like: 
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\linewidth]{PIN-SINDy results}
+    \caption{Enter Caption}
+    \label{fig:3}
+\end{figure}
+
+\item Provide some discussion on whether $\bm{\Xi}$ calculated for SINDy and separately for PIN-SINDy both match expectations.
+
+Both PIN-SINDy and SINDy used the same lambda, and have almost errors with identical orders of magnitude (1e-2). However, PIN-SINDy recovers the coefficients almost exactly accurately while SINDy does not recover coefficients for the x variable accurately.   This conforms to our hypothesis that PIN-SINDy provides more accurate information about the system itself. 
+
+    PIN-SINDy's accuracy can be accounted for by the fact that it already "knows" some of the variables, meaning that the additional variables minimize the loss equation before it needs to be minimized using sparse regression. Physically, it is more accurate because we are using what we already know about this system - i.e., assumptions made by the Lotka Volterra equation - to eliminate the possibility of certain governing equations.  
+    For instance, one of the assumptions made by a Lotka-Volterra model is that the rate of change of population is proportional to its size, and that prey have an unlimited access to food. That means that one of the governing terms for the growth of prey must be x (the population of prey), and likewise for predators (y). Pure SINDy doesn't know about the Lotka-Volterra model so it will not necessarily make that assumption. As seen in $\Xi_{SINDY}$, the pure SINDy model does not include x. However, since PIN-SINDy "knows" about the assumptions made in Lotka-Volterra models, it can correctly assume the term is included. 
+
+    Elements of this Case Study that could be further investigated include: SINDy models when more than one term is different from template equations, and how PIN-SINDy models react when certain assumptions are untrue. 
+
+
+\item Now, make a new plot of identical format to Figure \ref{fig:simp_sys}.
+Then, add both the SINDy and PIN-SINDy predictions on top.
+\end{enumerate}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\linewidth]{SINDy vs. PIN-SINDy}
+    \caption{Pure SINDy and PIN-SINDy model comparison}
+    \label{fig:4}
+\end{figure}
+
+
+\end{document}
 

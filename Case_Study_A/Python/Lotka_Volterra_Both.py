@@ -139,14 +139,27 @@ class SINDY:
         return self.coef
 
 
-    def simulate(self, t_span, u0, t_data, method="LSODA"):
+    def simulate(self, t_span, u0, t_data, method="LSODA", fi=None):
 
-        assert len(self.coef) != 0, "create sindy model first before simulating."
-        coef = self.coef
         pwrs = self.theta.get_powers()
         self.t_span = t_span
         self.u0 = u0
         self.t_data = t_data
+
+        f = self.f
+        theta_lib = self.theta_lib
+        s = STLSQ(f, theta_lib, self.lbd)
+        coef = s.sparse_regression(fi)
+        
+        model = []
+        for i in range(len(coef)):
+            model_term = np.dot(theta_lib.T, coef[i])
+            model.append(model_term)
+        model = np.array(model)
+
+        #update self.coef
+        coef = np.array(coef)
+        self.coef = coef
 
         def f(t, y):
             """function version of library. Takes positional argument y(list of state variable floats, len = # of state variables, time t(float), and np array
@@ -171,32 +184,36 @@ class SINDY:
         return sol
 
 
-    def best_lbd(self, X, true_coef):
+    def best_lbd(self, X, true_coef, fi=None):
         x, y = X
         lbd_guess = np.logspace(-6, 1, 50)
         min_err = np.inf
         lbd_opt = 0
-        divergence = []
-        inequal_shapes = 0
         for lbd in lbd_guess:
-            sindy = SINDY(self.dmethod, self.theta, self.var_list, lbd=lbd)
-            model = sindy.model()
-            coef_sindy = sindy.get_coef()
+            sindy_test = SINDY(self.dmethod, self.theta, self.var_list, lbd=lbd)
+            if fi is None:
+                model = sindy_test.model()
+            else:
+                model = sindy_test.model(fi=fi)
+            coef_sindy = sindy_test.get_coef()
             coef_err = np.mean((true_coef - coef_sindy)**2)
             if coef_err < min_err:
                 min_err = coef_err
                 lbd_opt = lbd
         final_sindy = SINDY(self.dmethod, self.theta, self.var_list, lbd=lbd_opt)
-        final_model = final_sindy.model()
+        if fi is None:
+            final_model = final_sindy.model()
+        else:
+            final_model = final_sindy.model(fi=fi)
         final_sol = final_sindy.simulate(self.t_span, self.u0, self.t_data).y
-        return {'model':final_model, 'min_err': min_err, 'lbd': lbd_opt, 'inequal_shapes': inequal_shapes, 'diverging_lbds': divergence, 'sol': final_sol}
+        return {'model':final_model, 'min_err': min_err, 'lbd': lbd_opt, 'sol': final_sol}
 
-# determine what output you would like to see:
+
 
 # create training data:
 def true_forcing(t, x):
-    dx = .7*x[0] - .5*x[1]*x[0]
-    dy = -.3*x[1] + .2*x[1]*x[0]
+    dx = .1*x[0] - .1*x[1]*x[0]
+    dy = -.1*x[1] + .1*x[1]*x[0]
     return [dx, dy]
 
 def prior_forcing(t, x):
@@ -205,8 +222,8 @@ def prior_forcing(t, x):
     return [dx, dy]
 
 
-true_coef = np.array([[.7, 0, 0, -.5, 0], [0, -.3, 0, .2, 0]])
-fi_lv = np.array([[1, 0, 0, -1, 0], [0, -1, 0, 0, 0]])
+true_coef = np.array([[.1, 0, 0, -.1, 0], [0, -.1, 0, .1, 0]])
+fi_lv = np.array([[1, 0, 0, -1, 0], [0, -1, 0, 1, 0]])
 
 x0 = [5, 2]
 
@@ -230,7 +247,7 @@ model_pin = sindy_pin.model(fi=fi_lv)
 
 sol_pin = sindy_pin.simulate(t_span, x0, t)
 
-best_lbd_pin = sindy_pin.best_lbd(X, true_coef)
+best_lbd_pin = sindy_pin.best_lbd(X, true_coef, fi=fi_lv)
 
 pinx, piny = best_lbd_pin['sol']
 
@@ -278,5 +295,6 @@ axs3.set_ylabel("y")
 axs3.set_xlabel("x")
 axs3.legend()
 
+plt.suptitle(f"pure SINDy coef: {sindy_pure.get_coef()} \n PIN-SINDy coef: {sindy_pin.get_coef()} \n real coef: {true_coef}")
 plt.tight_layout()
 plt.show()

@@ -109,6 +109,14 @@ class SINDY:
         self.lbd = lbd
         self.dmethod = dmethod
 
+
+    def get_coef(self, round_coef=True):
+        if round_coef:
+            for e in self.coef:
+                for i in range(len(e)):
+                    e[i] = round(e[i], 2)
+        return self.coef
+
     def model(self, fi=None):
         """creates differential equation system using sparse regression for state variables."""
         f = self.f
@@ -125,9 +133,71 @@ class SINDY:
         self.coef = coef
         return {'coef': coef, 'model': model }
 
-    def get_coef(self, round_coef=True):
-        if round_coef:
-            for e in self.coef:
-                for i in range(len(e)):
-                    e[i] = round(e[i], 2)
-        return self.coef
+    def simulate(self, t_span, u0, t_data, method="LSODA", fi=None):
+
+        pwrs = self.theta.get_powers()
+        self.t_span = t_span
+        self.u0 = u0
+        self.t_data = t_data
+
+        f = self.f
+        theta_lib = self.theta_lib
+        s = STLSQ(f, theta_lib, self.lbd)
+        coef = s.sparse_regression(fi)
+
+        model = []
+        for i in range(len(coef)):
+            model_term = np.dot(theta_lib.T, coef[i])
+            model.append(model_term)
+        model = np.array(model)
+
+        #update self.coef
+        coef = np.array(coef)
+        self.coef = coef
+
+        def f(t, y):
+            """function version of library. Takes positional argument y(list of state variable floats, len = # of state variables, time t(float), and np array
+            of sparse regression coefs(float np array)
+            t is a list of all the time steps in original data."""
+
+            theta_vals = []
+            for p in pwrs:
+                assert len(p) == len(y), "oops! recalculate theta library."
+                term = 1.0
+                for i in range(len(p)):
+                    term *= y[i]**p[i]
+                theta_vals.append(term)
+
+            theta_vals = np.array(theta_vals)
+            theta_vals = theta_vals[1:]
+
+            forcing = np.array([np.dot(theta_vals, coef_vector) for coef_vector in coef])
+            return forcing
+
+        sol = integrate.solve_ivp(f, t_span, u0, method=method, t_eval = t_data)
+        return sol
+
+
+    def best_lbd(self, X, true_coef, fi=None):
+        x, y = X
+        lbd_guess = np.logspace(-6, 1, 50)
+        min_err = np.inf
+        lbd_opt = 0
+        for lbd in lbd_guess:
+            sindy_test = SINDY(self.dmethod, self.theta, self.var_list, lbd=lbd)
+            if fi is None:
+                model = sindy_test.model()
+            else:
+                model = sindy_test.model(fi=fi)
+            coef_sindy = sindy_test.get_coef()
+            coef_err = np.mean((true_coef - coef_sindy)**2)
+            if coef_err < min_err:
+                min_err = coef_err
+                lbd_opt = lbd
+        final_sindy = SINDY(self.dmethod, self.theta, self.var_list, lbd=lbd_opt)
+        if fi is None:
+            final_model = final_sindy.model()
+        else:
+            final_model = final_sindy.model(fi=fi)
+        final_sol = final_sindy.simulate(self.t_span, self.u0, self.t_data).y
+        return {'model':final_model, 'min_err': min_err, 'lbd': lbd_opt, 'sol': final_sol}

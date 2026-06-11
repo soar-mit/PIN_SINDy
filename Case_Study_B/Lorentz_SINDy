@@ -212,7 +212,7 @@ class SINDY:
 # select what output you would like to see:
 add_noise = False
 plot_results = False
-plot_error = True
+plot_error = False
 
 #create model:
 
@@ -242,7 +242,7 @@ true_coef = np.array([[-sigma, sigma, 0, -kappa, 0, 0, 0, alpha, 0],
 
 
 t_span = (0, 20)
-t = np.linspace(0, 20, 2000)
+t = np.linspace(0, 20, 1400)
 y0 = (1, 1, 1)
 
 x, y, z = integrate.solve_ivp(true_equation, t_span, y0, str='LSODA', t_eval=t).y
@@ -256,27 +256,25 @@ if add_noise:
 
 dmethod = dmethods(X, t)
 theta_instance = theta(X, 2)
-lbd = .00001
+lbd = 1e-1
 sindy = SINDY(dmethod, theta_instance, X, lbd)
 
 model = sindy.model()
 sol = sindy.simulate(t_span, y0, t)
 
-best_lbd = sindy.best_lbd(X, true_coef)
-
-solx, soly, solz = best_lbd['sol']
-lbd = best_lbd['lbd']
-
-#find coefficient difference:
-
-coef_dif = np.abs(true_coef - sindy.get_coef())
-
-coef_dif[coef_dif<= .05] = 0
-
-coef_dif = np.round(coef_dif, 2)
+solx, soly, solz = sol.y
 
 #generate results:
 if plot_results:
+
+    #find coefficient difference:
+
+    coef_dif = np.abs(true_coef - sindy.get_coef())
+
+    coef_dif[coef_dif<= .02] = 0
+
+    coef_dif = np.round(coef_dif, 2)
+
     fig = plt.figure()
     axs = GridSpec(3, 2, width_ratios=[1, 1])
     axs1 = fig.add_subplot(axs[0, 1])

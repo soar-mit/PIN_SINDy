@@ -213,8 +213,8 @@ class SINDY:
 
 # select what output you would like to see:
 add_noise = False
-plot_results = False
-plot_error = True
+plot_results = True
+plot_error = False
 
 #create model:
 
@@ -241,60 +241,39 @@ kappa = 3/100
 
 true_coef = np.array([[-sigma, sigma, 0, -kappa, 0, 0, 0, alpha, 0],
     [rho, -1, gamma, 0, 0, -1, 0, 0, 0], [0, -kappa, -beta, 0, 1, 0, 0, 0, 0]])
+fi = np.array([[-sigma, sigma, 0, 0, 0, 0, 0, 0, 0], [rho, -1, 0, 0, 0, -1, 0, 0, 0],
+                       [0, 0, -beta, 0, 1, 0, 0, 0, 0]])
 
 
 t_span = (0, 20)
-t = np.linspace(0, 20, 2000)
+t = np.linspace(0, 20, 1400)
 y0 = (1, 1, 1)
 
-x, y, z = integrate.solve_ivp(true_equation, t_span, y0, str='LSODA').y
+x, y, z = integrate.solve_ivp(true_equation, t_span, y0, str='LSODA', t_eval=t).y
 X = np.array([x, y, z])
 
 if add_noise:
     noise = np.random.normal(0, 1.5, X.shape)
     X = X + noise
 
-
-# create prior equations:
-
-def prior(t, X):
-    sigma = 10
-    rho = 28
-    beta = 8/3
-
-    dx = sigma*(X[1]-X[0])
-    dy = X[0]*(rho - X[2]) - X[1]
-    dz = X[0]*X[1] - beta*X[2]
-
-    return np.array([dx, dy, dz])
-
-sigma = 10
-rho = 28
-beta = 8/3
-
-fi = np.array([[-sigma, sigma, 0, 0, 0, 0, 0, 0, 0], [rho, -1, 0, 0, 0, -1, 0, 0, 0],
-                       [0, 0, -beta, 0, 1, 0, 0, 0, 0]])
-
-#create SINDy model
+#create PIN-SINDy model
 
 dmethod = dmethods(X, t)
 theta_instance = theta(X, 2)
-lbd = .00001
+lbd = 1e3
 sindy = SINDY(dmethod, theta_instance, X, lbd)
 
 model = sindy.model(fi)
 sol = sindy.simulate(t_span, y0, t, fi=fi)
 
-best_lbd = sindy.best_lbd(X, true_coef, fi=fi)
-
-solx, soly, solz = best_lbd['sol']
-lbd = best_lbd['lbd']
+solx, soly, solz = sol.y
 
 #find coefficient difference:
 
-coef_dif = np.abs(true_coef - sindy.get_coef())
+sindy_coef = sindy.get_coef()
+coef_dif = np.abs(true_coef - sindy_coef)
 
-coef_dif[coef_dif<= .05] = 0
+coef_dif[coef_dif<= .02] = 0
 
 coef_dif = np.round(coef_dif, 2)
 
@@ -307,19 +286,20 @@ if plot_results:
     axs3 = fig.add_subplot(axs[2, 1], sharex=axs1)
     axs0 = fig.add_subplot(axs[:, 0], projection='3d')
 
-    axs0.plot(X[0], X[1], X[2], zdir='z')
+    axs0.plot(solx, soly, solz, color="blue")
+    axs0.plot(X[0], X[1], X[2], zdir='z', color="orange", linestyle="dashed")
 
-    axs1.plot(t, solx, label="SINDy x")
-    #axs1.plot(t, X[0], label='x data', linestyle='dashed')
+    axs1.plot(t, solx, label="PIN-SINDy x")
+    axs1.plot(t, X[0], label='x data', linestyle='dashed')
 
-    axs2.plot(t, soly, label="SINDy y")
-    #axs2.plot(t, X[1], label='y data', linestyle='dashed')
+    axs2.plot(t, soly, label="PIN-SINDy y")
+    axs2.plot(t, X[1], label='y data', linestyle='dashed')
 
-    axs3.plot(t, solz, label="SINDy z")
-    #axs3.plot(t, X[2], label='z data', linestyle='dashed')
+    axs3.plot(t, solz, label="PIN-SINDy z")
+    axs3.plot(t, X[2], label='z data', linestyle='dashed')
 
-    plt.suptitle(f"SINDy Lorentz Model \n coefficient difference: {coef_dif} \n lbd = {lbd}")
-    plt.legend()
+    plt.suptitle(f"PIN-SINDy Lorentz Model \n coefficient difference: {coef_dif} \n lbd = {lbd}")
+    axs0.legend()
     plt.tight_layout()
     plt.grid()
     plt.show()

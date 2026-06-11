@@ -215,6 +215,7 @@ class SINDY:
 #choose which output you would like to see:
 plot_results = False
 plot_error = True
+plot_true_vs_prior = False
 
 # generate training data
 
@@ -244,13 +245,53 @@ true_coef = np.array([[-sigma, sigma, 0, -kappa, 0, 0, 0, alpha, 0],
 fi = np.array([[-sigma, sigma, 0, 0, 0, 0, 0, 0, 0], [rho, -1, 0, 0, 0, -1, 0, 0, 0],
                        [0, 0, -beta, 0, 1, 0, 0, 0, 0]])
 
-
 t_span = (0, 20)
-t = np.linspace(0, 20, 2000)
+t = np.linspace(0, 20, 1400)
 y0 = (1, 1, 1)
 
 x, y, z = integrate.solve_ivp(true_equation, t_span, y0, str='LSODA', t_eval=t).y
 X = np.array([x, y, z])
+
+if plot_true_vs_prior:
+    def prior(t, X):
+        sigma = 10
+        rho = 28
+        beta = 8/3
+
+        dx = sigma*(X[1]-X[0])
+        dy = X[0]*(rho - X[2]) - X[1]
+        dz = X[0]*X[1] - beta*X[2]
+
+        return np.array([dx, dy, dz])
+
+    xp, yp, zp = integrate.solve_ivp(prior, t_span, y0, 'LSODA', t_eval=t).y
+
+    fig = plt.figure()
+    axs = GridSpec(3, 2, width_ratios=[1, 1])
+    axs_x = fig.add_subplot(axs[0, 1])
+    axs_y = fig.add_subplot(axs[1, 1], sharex=axs_x)
+    axs_z = fig.add_subplot(axs[2, 1], sharex=axs_x)
+    axs0 = fig.add_subplot(axs[:, 0], projection='3d')
+
+    axs_x.plot(t, x)
+    axs_x.plot(t, xp)
+    axs_x.set_ylabel('x')
+
+    axs_y.plot(t, y)
+    axs_y.plot(t, yp)
+    axs_y.set_ylabel('y')
+
+    axs_z.plot(t, z)
+    axs_z.plot(t, zp)
+    axs_z.set_ylabel('z')
+    axs_z.set_xlabel('t')
+
+    axs0.plot(x, y, z, label="true")
+    axs0.plot(xp, yp, zp, label="prior")
+
+    fig.legend()
+    plt.show()
+
 
 ######## generate PIN-SINDy model
 dmethod = dmethods(X, t)
@@ -315,19 +356,19 @@ if plot_error:
     axs_sz = fig.add_subplot(axs[2, 0], sharex=axs_sx)
 
     axs_px.plot(t, np.abs(sol_px - X[0]))
-    axs_px.set_ylabel('SINDy x error')
+    axs_px.set_ylabel('PIN-SINDy x error')
 
     axs_py.plot(t, np.abs(sol_py - X[1]))
-    axs_py.set_ylabel('SINDy y error')
+    axs_py.set_ylabel('PIN-SINDy y error')
 
     axs_pz.plot(t, np.abs(sol_pz - X[2]))
-    axs_pz.set_ylabel('SINDy z error')
+    axs_pz.set_ylabel('PIN-SINDy z error')
 
     axs_sx.plot(t, np.abs(sol_sx - X[0]))
-    axs_sx.set_ylabel('PIN-SINDy x error')
+    axs_sx.set_ylabel('SINDy x error')
 
     axs_sy.plot(t, np.abs(sol_sy - X[1]))
-    axs_sy.set_ylabel('PIN-SINDy y error')
+    axs_sy.set_ylabel('SINDy y error')
 
     axs_sz.plot(t, np.abs(sol_sz - X[2]))
     axs_sz.set_ylabel('SINDy z error')

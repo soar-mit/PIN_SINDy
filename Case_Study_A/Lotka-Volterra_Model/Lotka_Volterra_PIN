@@ -425,9 +425,6 @@ lbd_guess = np.logspace(-10, 2, 50)
 x_err = np.inf
 y_err = np.inf
 
-stlsq = STLSQ(diff, theta_instance.library())
-
-
 if plot_best_lbd:
 
     sindy = SINDY(dmethod, theta_instance, X)

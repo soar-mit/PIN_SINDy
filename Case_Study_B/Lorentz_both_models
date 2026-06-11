@@ -1,3 +1,11 @@
+
+from scipy import integrate
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+
+# source code
+
 from scipy import integrate
 import numpy as np
 from sklearn.linear_model import Lasso
@@ -115,7 +123,7 @@ class SINDY:
             for e in self.coef:
                 for i in range(len(e)):
                     e[i] = round(e[i], 2)
-        return self.coef
+        return np.array(self.coef)
 
     def model(self, fi=None):
         """creates differential equation system using sparse regression for state variables."""
@@ -200,3 +208,129 @@ class SINDY:
             final_model = final_sindy.model(fi=fi)
         final_sol = final_sindy.simulate(self.t_span, self.u0, self.t_data).y
         return {'model':final_model, 'min_err': min_err, 'lbd': lbd_opt, 'sol': final_sol}
+
+
+###################################################################################################
+
+#choose which output you would like to see:
+plot_results = False
+plot_error = True
+
+# generate training data
+
+def true_equation(t, X):
+    # define constants:
+    sigma = 10
+    rho = 28
+    beta = 8/3
+    alpha = 3/10
+    gamma = -1
+    kappa = 3/100
+
+    dx = sigma*(X[1]-X[0]) + alpha*X[2]*X[1] - kappa*X[0]**2
+    dy = X[0]*(rho - X[2]) - X[1] + gamma*X[2]
+    dz = X[0]*X[1] - beta*X[2] - kappa*X[1]
+    return np.array([dx, dy, dz])
+
+sigma = 10
+rho = 28
+beta = 8/3
+alpha = 3/10
+gamma = -1
+kappa = 3/100
+
+true_coef = np.array([[-sigma, sigma, 0, -kappa, 0, 0, 0, alpha, 0],
+    [rho, -1, gamma, 0, 0, -1, 0, 0, 0], [0, -kappa, -beta, 0, 1, 0, 0, 0, 0]])
+fi = np.array([[-sigma, sigma, 0, 0, 0, 0, 0, 0, 0], [rho, -1, 0, 0, 0, -1, 0, 0, 0],
+                       [0, 0, -beta, 0, 1, 0, 0, 0, 0]])
+
+
+t_span = (0, 20)
+t = np.linspace(0, 20, 2000)
+y0 = (1, 1, 1)
+
+x, y, z = integrate.solve_ivp(true_equation, t_span, y0, str='LSODA', t_eval=t).y
+X = np.array([x, y, z])
+
+######## generate PIN-SINDy model
+dmethod = dmethods(X, t)
+theta_instance = theta(X, 2)
+lbd_p = 1e3
+sindy_p = SINDY(dmethod, theta_instance, X, lbd_p)
+
+model_p = sindy_p.model(fi)
+sol_p = sindy_p.simulate(t_span, y0, t, fi=fi)
+sol_px, sol_py, sol_pz = sol_p.y
+
+######## generate SINDy model
+lbd_s = 1e-1
+sindy_s = SINDY(dmethod, theta_instance, X, lbd_s)
+
+model_s = sindy_s.model()
+sol_s = sindy_s.simulate(t_span, y0, t)
+sol_sx, sol_sy, sol_sz = sol_s.y
+
+######### graph results
+if plot_results:
+    fig = plt.figure()
+    axs = GridSpec(3, 2, width_ratios=[1, 1])
+    axs1 = fig.add_subplot(axs[0, 1])
+    axs2= fig.add_subplot(axs[1, 1], sharex=axs1)
+    axs3 = fig.add_subplot(axs[2, 1], sharex=axs1)
+    axs0 = fig.add_subplot(axs[:, 0], projection='3d')
+
+    axs0.plot(sol_sx, sol_sy, sol_sz, label="SINDy model")
+    axs0.plot(sol_px, sol_py, sol_pz, label="PIN-SINDy model")
+
+    axs1.plot(t, sol_sx, label="SINDy x")
+    axs1.plot(t, X[0], label='x data', linestyle='dashed')
+    axs1.plot(t, sol_px, label="PIN-SINDy x")
+
+    axs2.plot(t, sol_sy, label="SINDy y")
+    axs2.plot(t, X[1], label='y data', linestyle='dashed')
+    axs2.plot(t, sol_py, label="PIN-SINDy y")
+
+    axs3.plot(t, sol_sz, label="SINDy z")
+    axs3.plot(t, X[2], label='z data', linestyle='dashed')
+    axs3.plot(t, sol_pz, label="PIN-SINDy z")
+    axs3.legend()
+
+    plt.suptitle(f"Lorentz Model \n Initial Conditions: {y0}")
+    plt.legend()
+    plt.tight_layout()
+    plt.grid()
+    plt.show()
+
+######### plot error
+
+if plot_error:
+    fig = plt.figure()
+    axs = GridSpec(3, 2, width_ratios=[1, 1])
+    axs_px = fig.add_subplot(axs[0, 1])
+    axs_py = fig.add_subplot(axs[1, 1], sharex=axs_px)
+    axs_pz = fig.add_subplot(axs[2, 1], sharex=axs_px)
+
+    axs_sx = fig.add_subplot(axs[0, 0])
+    axs_sy = fig.add_subplot(axs[1, 0], sharex=axs_sx)
+    axs_sz = fig.add_subplot(axs[2, 0], sharex=axs_sx)
+
+    axs_px.plot(t, np.abs(sol_px - X[0]))
+    axs_px.set_ylabel('SINDy x error')
+
+    axs_py.plot(t, np.abs(sol_py - X[1]))
+    axs_py.set_ylabel('SINDy y error')
+
+    axs_pz.plot(t, np.abs(sol_pz - X[2]))
+    axs_pz.set_ylabel('SINDy z error')
+
+    axs_sx.plot(t, np.abs(sol_sx - X[0]))
+    axs_sx.set_ylabel('PIN-SINDy x error')
+
+    axs_sy.plot(t, np.abs(sol_sy - X[1]))
+    axs_sy.set_ylabel('PIN-SINDy y error')
+
+    axs_sz.plot(t, np.abs(sol_sz - X[2]))
+    axs_sz.set_ylabel('SINDy z error')
+
+    plt.suptitle("SINDy and PIN-SINDy Error \n Initial Conditions (1, 1, 1)")
+    plt.show()

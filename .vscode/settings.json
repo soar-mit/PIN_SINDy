@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./SINDy_Source_Code"
+    ]
+}

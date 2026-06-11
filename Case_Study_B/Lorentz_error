@@ -1,3 +1,11 @@
+
+from scipy import integrate
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+
+# source code
+
 from scipy import integrate
 import numpy as np
 from sklearn.linear_model import Lasso
@@ -115,7 +123,7 @@ class SINDY:
             for e in self.coef:
                 for i in range(len(e)):
                     e[i] = round(e[i], 2)
-        return self.coef
+        return np.array(self.coef)
 
     def model(self, fi=None):
         """creates differential equation system using sparse regression for state variables."""
@@ -200,3 +208,93 @@ class SINDY:
             final_model = final_sindy.model(fi=fi)
         final_sol = final_sindy.simulate(self.t_span, self.u0, self.t_data).y
         return {'model':final_model, 'min_err': min_err, 'lbd': lbd_opt, 'sol': final_sol}
+
+############################################################################################
+
+def true_equation(t, X):
+    # define constants:
+    sigma = 10
+    rho = 28
+    beta = 8/3
+    alpha = 3/10
+    gamma = -1
+    kappa = 3/100
+
+    dx = sigma*(X[1]-X[0]) + alpha*X[2]*X[1] - kappa*X[0]**2
+    dy = X[0]*(rho - X[2]) - X[1] + gamma*X[2]
+    dz = X[0]*X[1] - beta*X[2] - kappa*X[1]
+    return np.array([dx, dy, dz])
+
+def prior(t, X):
+    sigma = 10
+    rho = 28
+    beta = 8/3
+
+    dx = sigma*(X[1]-X[0])
+    dy = X[0]*(rho - X[2]) - X[1]
+    dz = X[0]*X[1] - beta*X[2]
+
+    return np.array([dx, dy, dz])
+
+
+sigma = 10
+rho = 28
+beta = 8/3
+alpha = 3/10
+gamma = -1
+kappa = 3/100
+
+true_coef = np.array([[-sigma, sigma, 0, -kappa, 0, 0, 0, alpha, 0],
+    [rho, -1, gamma, 0, 0, -1, 0, 0, 0], [0, -kappa, -beta, 0, 1, 0, 0, 0, 0]])
+fi = np.array([[-sigma, sigma, 0, 0, 0, 0, 0, 0, 0], [rho, -1, 0, 0, 0, -1, 0, 0, 0],
+                       [0, 0, -beta, 0, 1, 0, 0, 0, 0]])
+
+
+t_span = (0, 20)
+t = np.linspace(0, 20, 2000)
+y0 = (1, 1, 1)
+
+x, y, z = integrate.solve_ivp(true_equation, t_span, y0, str='LSODA', t_eval=t).y
+X = np.array([x, y, z])
+
+#create SINDy model
+
+dmethod = dmethods(X, t)
+theta_instance = theta(X, 2)
+
+#generate results:
+lbd_space = np.logspace(-7, 0, 50)
+zetaPIN = []
+
+for lbd in lbd_space:
+    sindy_pin = SINDY(dmethod, theta_instance, X, lbd)
+    model_pin = sindy_pin.model(fi)
+    sol_pin = sindy_pin.simulate(t_span, y0, t, fi=fi)
+    sindy_coef_pin = sindy_pin.get_coef()
+
+    zeta_term = np.linalg.norm(sindy_coef_pin - true_coef, 2)/ np.linalg.norm(sindy_coef_pin+fi, 2)
+    zetaPIN.append(zeta_term)
+
+zetaPIN = np.array(zetaPIN)
+
+zetaSINDY = []
+
+for lbd in lbd_space:
+    sindy = SINDY(dmethod, theta_instance, X, lbd)
+    model = sindy.model()
+    sol = sindy.simulate(t_span, y0, t)
+    sindy_coef = sindy.get_coef()
+
+    zeta_term = np.linalg.norm(sindy_coef - true_coef, 2)/ np.linalg.norm(sindy_coef, 2)
+    zetaSINDY.append(zeta_term)
+
+zetaSINDY = np.array(zetaSINDY)
+
+plt.plot(lbd_space, zetaSINDY, label='SINDy error')
+plt.plot(lbd_space, zetaPIN, label='PIN-SINDy error')
+plt.xlabel('lambda values')
+plt.ylabel('coefficient error (scaled)')
+plt.title('Lorentz System Error')
+plt.legend()
+plt.grid()
+plt.show()

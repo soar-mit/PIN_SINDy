@@ -209,10 +209,13 @@ class SINDY:
         final_sol = final_sindy.simulate(self.t_span, self.u0, self.t_data).y
         return {'model':final_model, 'min_err': min_err, 'lbd': lbd_opt, 'sol': final_sol}
 
+###########################################################################################################################
+
 # select what output you would like to see:
 add_noise = False
 plot_results = False
 plot_error = False
+X0 = (1, 1, 1) # initial conditions for SINDy to predict.
 
 #create model:
 
@@ -274,6 +277,10 @@ if plot_results:
     coef_dif[coef_dif<= .02] = 0
 
     coef_dif = np.round(coef_dif, 2)
+
+    # generate true simulation:
+    if X0 != y0:
+        x, y, z = integrate.solve_ivp(true_equation, t_span, X0, method="LSODA", t_eval=t).y
 
     fig = plt.figure()
     axs = GridSpec(3, 2, width_ratios=[1, 1])

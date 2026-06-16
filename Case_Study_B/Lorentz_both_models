@@ -213,9 +213,10 @@ class SINDY:
 ###################################################################################################
 
 #choose which output you would like to see:
-plot_results = False
-plot_error = True
+plot_results = True
+plot_error = False
 plot_true_vs_prior = False
+X0 = (1, 1, 1) # initial conditions that the model will use - NOT be trained on.
 
 # generate training data
 
@@ -242,7 +243,7 @@ kappa = 3/100
 
 true_coef = np.array([[-sigma, sigma, 0, -kappa, 0, 0, 0, alpha, 0],
     [rho, -1, gamma, 0, 0, -1, 0, 0, 0], [0, -kappa, -beta, 0, 1, 0, 0, 0, 0]])
-fi = np.array([[-sigma, sigma, 0, 0, 0, 0, 0, 0, 0], [rho, -1, 0, 0, 0, -1, 0, 0, 0],
+fi = np.array([[-sigma, sigma, 0, 0, 0, 0, 0, 0, 0], [rho, -1, gamma, 0, 0, -1, 0, 0, 0],
                        [0, 0, -beta, 0, 1, 0, 0, 0, 0]])
 
 t_span = (0, 20)
@@ -257,9 +258,10 @@ if plot_true_vs_prior:
         sigma = 10
         rho = 28
         beta = 8/3
+        gamma = -1
 
         dx = sigma*(X[1]-X[0])
-        dy = X[0]*(rho - X[2]) - X[1]
+        dy = X[0]*(rho - X[2]) - X[1] + gamma*X[2]
         dz = X[0]*X[1] - beta*X[2]
 
         return np.array([dx, dy, dz])
@@ -300,7 +302,7 @@ lbd_p = 1e3
 sindy_p = SINDY(dmethod, theta_instance, X, lbd_p)
 
 model_p = sindy_p.model(fi)
-sol_p = sindy_p.simulate(t_span, y0, t, fi=fi)
+sol_p = sindy_p.simulate(t_span, X0, t, fi=fi)
 sol_px, sol_py, sol_pz = sol_p.y
 
 ######## generate SINDy model
@@ -308,11 +310,14 @@ lbd_s = 1e-1
 sindy_s = SINDY(dmethod, theta_instance, X, lbd_s)
 
 model_s = sindy_s.model()
-sol_s = sindy_s.simulate(t_span, y0, t)
+sol_s = sindy_s.simulate(t_span, X0, t)
 sol_sx, sol_sy, sol_sz = sol_s.y
 
 ######### graph results
 if plot_results:
+    if X0 != y0:
+        x, y, z = integrate.solve_ivp(true_equation, t_span, X0, 'LSODA', t_eval=t).y
+
     fig = plt.figure()
     axs = GridSpec(3, 2, width_ratios=[1, 1])
     axs1 = fig.add_subplot(axs[0, 1])
@@ -322,21 +327,22 @@ if plot_results:
 
     axs0.plot(sol_sx, sol_sy, sol_sz, label="SINDy model")
     axs0.plot(sol_px, sol_py, sol_pz, label="PIN-SINDy model")
+    axs0.plot(x, y, z, label="actual")
 
     axs1.plot(t, sol_sx, label="SINDy x")
-    axs1.plot(t, X[0], label='x data', linestyle='dashed')
     axs1.plot(t, sol_px, label="PIN-SINDy x")
+    axs1.plot(t, x, label='x data', linestyle='dashed')
 
     axs2.plot(t, sol_sy, label="SINDy y")
-    axs2.plot(t, X[1], label='y data', linestyle='dashed')
     axs2.plot(t, sol_py, label="PIN-SINDy y")
+    axs2.plot(t, y, label='y data', linestyle='dashed')
 
     axs3.plot(t, sol_sz, label="SINDy z")
-    axs3.plot(t, X[2], label='z data', linestyle='dashed')
     axs3.plot(t, sol_pz, label="PIN-SINDy z")
+    axs3.plot(t, z, label='z data', linestyle='dashed')
     axs3.legend()
 
-    plt.suptitle(f"Lorentz Model \n Initial Conditions: {y0}")
+    plt.suptitle(f"Lorentz Model \n Initial Conditions: {X0} \n trained with initial conditions: {y0}")
     plt.legend()
     plt.tight_layout()
     plt.grid()

@@ -104,6 +104,7 @@ class STLSQ:
         else:
             for i in range(len(diff)):
                 coef.append(model.fit(theta_lib.T, diff[i] - fi[i] @ theta_lib).coef_)
+            coef = np.array(coef)
             coef = fi + coef
         return coef
 class SINDY:
@@ -125,7 +126,7 @@ class SINDY:
                     e[i] = round(e[i], 2)
         return np.array(self.coef)
 
-    def model(self, fi=None):
+    def model(self, threshold=None, fi=None):
         """creates differential equation system using sparse regression for state variables."""
         f = self.f
         theta_lib = self.theta_lib
@@ -215,6 +216,7 @@ class SINDY:
 add_noise = False
 plot_results = True
 plot_error = False
+X0 = (1, 1, 1) # initial conditions to run PIN-SINDy on.
 
 #create model:
 
@@ -249,7 +251,7 @@ t_span = (0, 20)
 t = np.linspace(0, 20, 1400)
 y0 = (1, 1, 1)
 
-x, y, z = integrate.solve_ivp(true_equation, t_span, y0, str='LSODA', t_eval=t).y
+x, y, z = integrate.solve_ivp(true_equation, t_span, y0, method='LSODA', t_eval=t).y
 X = np.array([x, y, z])
 
 if add_noise:
@@ -260,11 +262,11 @@ if add_noise:
 
 dmethod = dmethods(X, t)
 theta_instance = theta(X, 2)
-lbd = 1e3
+lbd = 1000
 sindy = SINDY(dmethod, theta_instance, X, lbd)
 
-model = sindy.model(fi)
-sol = sindy.simulate(t_span, y0, t, fi=fi)
+model = sindy.model(threshold=.01, fi=fi)
+sol = sindy.simulate(t_span, X0, t, fi=fi)
 
 solx, soly, solz = sol.y
 
@@ -273,12 +275,13 @@ solx, soly, solz = sol.y
 sindy_coef = sindy.get_coef()
 coef_dif = np.abs(true_coef - sindy_coef)
 
-coef_dif[coef_dif<= .02] = 0
-
 coef_dif = np.round(coef_dif, 2)
 
 #generate results:
 if plot_results:
+    if y0 != X0:
+        x, y, z = integrate.solve_ivp(true_coef, t_span, X0, method="LSODA", t_eval=t)
+
     fig = plt.figure()
     axs = GridSpec(3, 2, width_ratios=[1, 1])
     axs1 = fig.add_subplot(axs[0, 1])
@@ -287,16 +290,16 @@ if plot_results:
     axs0 = fig.add_subplot(axs[:, 0], projection='3d')
 
     axs0.plot(solx, soly, solz, color="blue")
-    axs0.plot(X[0], X[1], X[2], zdir='z', color="orange", linestyle="dashed")
+    axs0.plot(x, y, z, zdir='z', color="orange", linestyle="dashed")
 
     axs1.plot(t, solx, label="PIN-SINDy x")
-    axs1.plot(t, X[0], label='x data', linestyle='dashed')
+    axs1.plot(t, x, label='x data', linestyle='dashed')
 
     axs2.plot(t, soly, label="PIN-SINDy y")
-    axs2.plot(t, X[1], label='y data', linestyle='dashed')
+    axs2.plot(t, y, label='y data', linestyle='dashed')
 
     axs3.plot(t, solz, label="PIN-SINDy z")
-    axs3.plot(t, X[2], label='z data', linestyle='dashed')
+    axs3.plot(t, z, label='z data', linestyle='dashed')
 
     plt.suptitle(f"PIN-SINDy Lorentz Model \n coefficient difference: {coef_dif} \n lbd = {lbd}")
     axs0.legend()

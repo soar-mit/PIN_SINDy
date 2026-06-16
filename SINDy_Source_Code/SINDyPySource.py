@@ -96,6 +96,7 @@ class STLSQ:
         else:
             for i in range(len(diff)):
                 coef.append(model.fit(theta_lib.T, diff[i] - fi[i] @ theta_lib).coef_)
+            coef = np.array(coef)
             coef = fi + coef
         return coef
 class SINDY:

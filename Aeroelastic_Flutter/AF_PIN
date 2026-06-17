@@ -1,1 +1,45 @@
 from SINDy_Source_Code.SINDyPySource import SINDY, theta, dmethod
+
+#Step 1: Import training data
+
+
+#step 2: Define prior equations
+
+"""ideal equations to find: alpha(t) and h(t)
+
+kh = plunge stiffness = 2637 lb/ft
+ka = pitch stiffness = 2964 ft lb/rad
+ch = plunge damping = unknown!
+ca = pitch damping = unknown!
+sa = static imbalance coupling term = unknown!
+ia = pitch inertia = 2.78 slug ft^2
+m = generalized mass = 6.03 slug
+
+h defines plunge
+a (alpha) defines pitch
+
+
+
+equations needed:
+
+m*h'' + ch*h' + kh*h + sa*alpha'' = La
+ia*alpha'' + ca*alpha' + ka*alpha + sa*h'' = Ma
+
+prior coefficients:
+
+
+
+m*h'' + kh*h = La
+ia*alpha'' + ka*alpha = Ma
+
+
+"""
+
+
+
+
+
+#Step 3: Create PIN-SINDy model
+
+
+#Step 4: Compare coefficients

@@ -83,33 +83,44 @@ class STLSQ:
         self.lbd = lbd
         self.theta_lib = theta_lib
 
-    def sparse_regression(self, fi=None):
+    def sparse_regression(self, fi=None, norm_optimization=False, threshold=None):
         """returns the final coefficients for the system using pure SINDy (fi=None) or PIN-SINDy."""
         diff = self.diff
         theta_lib = self.theta_lib
         model = Lasso(alpha=self.lbd, fit_intercept=False)
-
-        #normalize theta matrix
-        norm = np.linalg.norm(theta_lib, ord=2, axis=1)
-        norm[norm==0] = 1
-
-        theta_lib_scaled = theta_lib/norm[:,None]
-
-        coef_scaled=[]
-        if fi is None:
-            for i in range(len(diff)):
-                coef_scaled.append(model.fit(theta_lib_scaled.T, diff[i]).coef_) # (1, 5000) and (5000, 5) makes (1, 5) yes!
-            coef_scaled = np.array(coef_scaled)
-            coef = coef_scaled / norm
+        if norm_optimization:
+            norm = np.linalg.norm(theta_lib, ord=2, axis=1)
+            norm[norm==0] = 1
+            theta_lib_scaled = theta_lib/norm[:,None]
+            coef_scaled=[]
+            if fi is None:
+                for i in range(len(diff)):
+                    coef_scaled.append(model.fit(theta_lib_scaled.T, diff[i]).coef_) # (1, 5000) and (5000, 5) makes (1, 5) yes!
+                coef_scaled = np.array(coef_scaled)
+                coef = coef_scaled / norm
+            else:
+                for i in range(len(diff)):
+                    coef_scaled.append(model.fit(theta_lib_scaled.T, diff[i] - fi[i] @ theta_lib_scaled).coef_)
+                coef_scaled = np.array(coef_scaled)
+                coef = fi + coef_scaled / norm
         else:
-            for i in range(len(diff)):
-                coef_scaled.append(model.fit(theta_lib_scaled.T, diff[i] - fi[i] @ theta_lib_scaled).coef_)
-            coef_scaled = np.array(coef_scaled)
-            coef = fi + coef_scaled / norm
+           coef=[]
+           if fi is None:
+                for i in range(len(diff)):
+                    coef.append(model.fit(theta_lib.T, diff[i]).coef_) # (1, 5000) and (5000, 5) makes (1, 5) yes!
+                coef = np.array(coef)
+           else:
+                for i in range(len(diff)):
+                    coef.append(model.fit(theta_lib.T, diff[i] - fi[i] @ theta_lib).coef_)
+                coef= np.array(coef)
+                coef = fi + coef
+        if threshold:
+            coef[coef <= np.abs(threshold)] = 0
         return coef
+
 class SINDY:
 
-    def __init__(self, dmethod, theta_instance, var_list, lbd=.01):
+    def __init__(self, dmethod, theta_instance, var_list, lbd=.01, norm_optimization=False, threshold=None):
         self.f = dmethod.forward_difference()
         self.theta_lib = theta_instance.library()
         self.var_list = np.array(var_list)
@@ -117,6 +128,8 @@ class SINDY:
         self.theta = theta_instance
         self.lbd = lbd
         self.dmethod = dmethod
+        self.norm_optimization = norm_optimization
+        self.threshold = threshold
 
 
     def get_coef(self, round_coef=True):
@@ -131,7 +144,7 @@ class SINDY:
         f = self.f
         theta_lib = self.theta_lib
         s = STLSQ(f, theta_lib, self.lbd)
-        coef = s.sparse_regression(fi)
+        coef = s.sparse_regression(fi, norm_optimization = self.norm_optimization, threshold=self.threshold)
         model = []
         for i in range(len(coef)):
             model_term = np.dot(theta_lib.T, coef[i])

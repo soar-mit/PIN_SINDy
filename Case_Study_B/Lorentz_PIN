@@ -3,12 +3,12 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from SINDy_Source_Code.SINDyPySource import SINDY, theta, dmethods
+from SINDyPySource import SINDY, theta, dmethods
 
 # select what output you would like to see:
 add_noise = False
-plot_results = True
-plot_error = False
+plot_results = False
+plot_error = True
 X0 = (1, 1, 1) # initial conditions to run PIN-SINDy on.
 
 #create model:
@@ -58,7 +58,7 @@ theta_instance = theta(X, 2)
 lbd = 1000
 sindy = SINDY(dmethod, theta_instance, X, lbd)
 
-model = sindy.model(threshold=.01, fi=fi)
+model = sindy.model(fi=fi)
 sol = sindy.simulate(t_span, X0, t, fi=fi)
 
 solx, soly, solz = sol.y

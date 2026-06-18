@@ -2,13 +2,14 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from SINDy_Source_Code.SINDyPySource import SINDY, theta, dmethod
+from SINDyPySource import SINDY, theta, dmethods
 
 # Goal: generate PIN-SINDy Model for Lotka-Volterra Equations
 
 
 # determine what output you would like to see:
 plot_error = False  #plots the error of the SINDy solution over time
+plot_opt_lbd = False
 plot_results = True #plots the SINDy solution and the true solution over time.
 plot_true_vs_prior = False #plots the true solution and the prior solution over time.
 
@@ -86,17 +87,11 @@ x_err = np.inf
 y_err = np.inf
 
 print(theta_instance.library().shape)
-
-sindy = SINDY(dmethod, theta_instance, X)
+lbd=1e-6
+sindy = SINDY(dmethod, theta_instance, X, lbd=lbd)
 model = sindy.model(fi)
 sol = sindy.simulate(t_span, x0, t)
-
-best_lbd = sindy.best_lbd(X, true_coef)
-
-solx, soly = best_lbd['sol']
-
-lbd = best_lbd['lbd']
-
+solx, soly = sol.y
 
 ## plot results
 if plot_results:
@@ -126,4 +121,26 @@ if plot_error:
     axs[1].legend()
     plt.tight_layout()
 
+    plt.show()
+
+if plot_opt_lbd:
+    lbd_space = np.logspace(-7, 3, 50)
+    zeta = []
+
+    for lbd in lbd_space:
+        sindy = SINDY(dmethod, theta_instance, X, lbd)
+        model = sindy.model(fi)
+        sol = sindy.simulate(t_span, x0, t, fi=fi)
+        sindy_coef = sindy.get_coef()
+
+        zeta_term = np.linalg.norm(sindy_coef - true_coef, 2)/ np.linalg.norm(sindy_coef+fi, 2)
+        zeta.append(zeta_term)
+
+    zeta = np.array(zeta)
+
+    plt.plot(lbd_space, zeta, color='orange')
+    plt.xlabel('lambda values')
+    plt.ylabel('coefficient error (scaled)')
+    plt.title('PIN-SINDy Lotka-Volterra System Error')
+    plt.grid()
     plt.show()

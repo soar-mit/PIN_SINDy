@@ -3,7 +3,7 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from SINDy_Source_Code.SINDyPySource import SINDY, theta, dmethod
+from SINDy_Source_Code.SINDyPySource import SINDY, theta, dmethods
 
 #choose which output you would like to see:
 plot_results = True

@@ -88,6 +88,10 @@ class STLSQ:
         diff = self.diff
         theta_lib = self.theta_lib
         model = Lasso(alpha=self.lbd, fit_intercept=False)
+
+        #normalize theta matrix
+        norm = np.linalg.norm(theta_lib)
+        print(norm.shape)
         coef=[]
         if fi is None:
             for i in range(len(diff)):

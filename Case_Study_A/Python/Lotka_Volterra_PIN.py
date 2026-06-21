@@ -82,11 +82,6 @@ diff = dmethod.forward_difference()
 
 theta_instance = theta(X, 2)
 
-lbd_guess = np.logspace(-10, 2, 50)
-x_err = np.inf
-y_err = np.inf
-
-print(theta_instance.library().shape)
 lbd=1e-6
 sindy = SINDY(dmethod, theta_instance, X, lbd=lbd)
 model = sindy.model(fi)

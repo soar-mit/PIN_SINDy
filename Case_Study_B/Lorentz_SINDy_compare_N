@@ -3,7 +3,7 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from SINDy_Source_Code.SINDyPySource import SINDY, theta, dmethods
+from SINDyPySource import SINDY, theta, dmethods
 
 #determine whether you would like noise or not:
 add_noise = False
@@ -41,6 +41,8 @@ Nlist = np.linspace(4, 2000, 500, dtype=int)
 
 
 zeta = []
+minimum = np.inf
+opt_N = 0
 
 for N in Nlist:
     t_span = (0, 20)
@@ -48,30 +50,34 @@ for N in Nlist:
     y0 = (1, 1, 1)
 
 
-    x, y, z = integrate.solve_ivp(true_equation, t_span, y0, str='LSODA').y
+    x, y, z = integrate.solve_ivp(true_equation, t_span, y0, t_eval=t, method='LSODA').y
     X = np.array([x, y, z])
-
-    if add_noise:
-        noise = np.random.normal(0, 1.5, X.shape)
-        X = X + noise
 
     dmethod = dmethods(X, t)
     theta_instance = theta(X, 2)
-    lbd = 1e3
+    lbd = 1e-1
 
     sindy = SINDY(dmethod, theta_instance, X, lbd)
     model = sindy.model()
     sindy_coef = sindy.get_coef()
 
-    zeta_term = np.linalg.norm(sindy_coef - true_coef, 2)/ np.linalg.norm(sindy_coef, 2)
+
+    sindy_coef_norm = np.linalg.norm(sindy_coef, 2)
+    if sindy_coef_norm == 0:
+        sindy_coef_norm = 1
+
+    zeta_term = np.linalg.norm(sindy_coef - true_coef, 2)/ sindy_coef_norm
     zeta.append(zeta_term)
+    if zeta_term <= minimum:
+        minimum = zeta_term
+        opt_N = N
 
 zeta = np.array(zeta)
-
-plt.plot(Nlist[250:], zeta[250:])
+plt.plot(Nlist, zeta)
+plt.plot(opt_N, minimum, 'ro')
 plt.xlabel('values of N')
 plt.ylabel('average coefficient error')
-plt.title(f'SINDy error where lbd ={lbd}')
+plt.title(f'SINDy error where lbd ={lbd}. minimum coefficient error is {minimum} where number of time steps is {N}')
 plt.tight_layout()
 plt.grid()
 plt.show()

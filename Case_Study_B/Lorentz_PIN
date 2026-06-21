@@ -3,7 +3,7 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from SINDyPySource import SINDY, theta, dmethods
+from SINDy_Source_Code.SINDyPySource import SINDY, theta, dmethods
 
 # select what output you would like to see:
 add_noise = False

@@ -3,6 +3,9 @@ import numpy as np
 from sklearn.linear_model import Lasso
 import itertools
 from scipy.signal import savgol_filter
+import os
+
+print("Current place of this file:" + os.getcwd())
 
 class theta:
     def __init__(self, var_list, order):
@@ -56,8 +59,7 @@ class dmethods:
         "t: list of floats "
         "x: list of floats: one state variable at different times."
 
-        smooth_var = savgol_filter(var, window_length=11, polyorder=3)
-        f = np.gradient(smooth_var, self.dt)
+        f = np.gradient(var, self.dt)
         return f
 
     def forward_difference(self):

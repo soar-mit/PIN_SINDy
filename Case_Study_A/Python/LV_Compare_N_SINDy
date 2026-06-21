@@ -1,0 +1,59 @@
+from scipy import integrate
+import numpy as np
+import matplotlib.pyplot as plt
+from Case_Study_B.SINDyPySource import SINDY, theta, dmethods
+#determine whether you would like noise or not:
+add_noise = False
+
+# instructions: use for optimal PIN-SINDy lambda (1e3) and optimal SINDy lambda (1e-2)
+
+# generate training data:
+def true_forcing(t, x):
+    dx = .7*x[0] - .5*x[1]*x[0]
+    dy = -.3*x[1] + .2*x[1]*x[0]
+    return [dx, dy]
+
+
+true_coef = np.array([[.7, 0, 0, -.5, 0], [0, -.3, 0, .2, 0]])
+
+Nlist = np.linspace(100, 2000, 500, dtype=int)
+
+
+zeta = []
+minimum = np.inf
+opt_N = 0
+
+for N in Nlist:
+    t_span = (0, 20)
+    t = np.linspace(0, 20, N)
+    y0 = (5, 7)
+
+
+    x, y = integrate.solve_ivp(true_forcing, t_span, y0, t_eval=t, method='LSODA').y
+    X = np.array([x, y])
+
+    dmethod = dmethods(X, t)
+    theta_instance = theta(X, 2)
+    lbd = 1e-6
+
+    sindy = SINDY(dmethod, theta_instance, X, lbd)
+    model = sindy.model()
+    sindy_coef = sindy.get_coef()
+
+    zeta_term = np.linalg.norm(sindy_coef - true_coef, 2)/ np.linalg.norm(sindy_coef, 2)
+    zeta.append(zeta_term)
+    if zeta_term <= minimum:
+        minimum = zeta_term
+        opt_N = N
+
+zeta = np.array(zeta)
+
+
+plt.plot(opt_N, minimum, "ro")
+plt.plot(Nlist, zeta)
+plt.xlabel('values of N')
+plt.ylabel('average coefficient error')
+plt.title(f'SINDy error where lbd ={lbd}. minimum error is {minimum} where optimal time step number is {opt_N}')
+plt.tight_layout()
+plt.grid()
+plt.show()

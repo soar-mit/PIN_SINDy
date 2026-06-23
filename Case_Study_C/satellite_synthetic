@@ -1,0 +1,119 @@
+from SINDyPySource import SINDY, theta, dmethods
+from scipy import integrate
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+# Goal: to find the density constant and synthetic atmospheric density constant in a
+#  hypothetical satellite orbit using SINDy and PIN-SINDy.
+# experiment: have SINDy try to make the other term, and have it already given the other term and have to find the coefficient.
+## step 0: define output
+plot_true_vs_prior = True
+plot_results = True
+plot_opt_lbd = True
+y0 = [0, 0, 0, 0, 0, 0]  #model trained on X0 = (5, 5)
+
+
+#step 1: define true and prior equation
+
+def orbital_equation(t, X):
+    # X = [x, y, z, dxdt, dydt, dzdt]
+    M = 5.972 * 10e24 # mass of earth
+    m = 700  #mass of satellite
+    Cd = 2.2 # drag coefficient
+    A = 14.5*1.59 # cross sectional area
+    G = 6.6743 * 10e-11 # gravitational constant
+    R = 6371 *10e3 # radius of earth
+    J2 = 1.08263 * 10e-3 # perturbation coefficient
+    rho0 = 1.225 # atmospheric density coefficient
+    H = 5000 # height scale
+    omega_E = np.array([0, 0, 7.2921*10e-5])
+    V = np.array([X[3], X[4], X[5]])
+    r = np.array([X[0], X[1], X[2]])
+    rmag = (X[0]**2 + X[1]**2 + X[2]**2)**(1/2)
+    Vrel = V - np.cross(omega_E, r)
+    Vrel_mag = (Vrel[0]**2 + Vrel[1]**2 + Vrel[2]**2)**(1/2)
+
+    adrag = -(0.5 * Cd * A / m) * rho0 * Vrel_mag * Vrel
+
+    ddx = (-M*G*X[0] / rmag**3
+    +(3*G*M*R**2*J2*X[0])*(5*X[2]/(rmag**2) - 1)/(2*rmag**5)
+    + adrag[0]*np.exp(-(rmag-6371*10e3)/H) )
+    ddy = (-M*G*X[1] / rmag**3
+    +(3*G*M*R**2*J2*X[1])*(5*X[2]/rmag**2 - 1)/(2*rmag**5)
+    + adrag[1]*np.exp(-(rmag - 6371*10e3)/H) )
+    ddz = (-M*G*X[2] / rmag**3
+    +(3*G*M*R**2*J2*X[2])*(5*X[2]/rmag**2 - 3)/(2*rmag**5)
+    + np.exp(-(rmag - 6371*10e3)/H)*adrag[2] )
+
+    return [X[3], X[4], X[5], ddx, ddy, ddz]
+
+
+# find initial conditions:
+r0 = 70000e3
+G = 6.6743 * 10e-11
+M = 5.972 * 10e24
+
+v0 = np.sqrt(G*M/r0)
+
+X0 = (r0, 0, 0,
+      0, v0, 0)
+
+#calculate period:
+T = 2*np.pi*(r0**3 / (G*M))**(1/2)
+t_span = (0, int(T)+100)
+t = np.linspace(t_span[0], t_span[1], int(2*T))
+
+x, y, z, dx, dy, dz = integrate.solve_ivp(orbital_equation, t_span, X0, method='LSODA', t_eval=t).y
+X = np.array([x, y, z, dx, dy, dz])
+
+if plot_true_vs_prior:
+    def prior_equation(t, X):
+        M = 5.972 * 10e24
+        G = 6.6743 * 10e-11
+        R = 6371 *10e3 # radius of earth
+        J2 = 1.08263 * 10e-3
+        rmag = (X[0]**2 + X[1]**2 + X[2]**2)**(1/2)
+
+        ddx = (-M*G*X[0] / rmag**3
+        +(3*G*M*R**2*J2*X[0])*(X[0]**2 + X[1]**2 -4*X[2]**2)/(2*rmag**7))
+        ddy = (-M*G*X[1] / rmag**3
+        +(3*G*M*R**2*J2*X[1])*(X[0]**2 + X[1]**2 -4*X[2]**2)/(2*rmag**7) )
+        ddz = (-M*G*X[2] / rmag**3
+        +(3*G*M*R**2*J2*X[2])*(X[0]**2 + X[1]**2 -4*X[2]**2)/(2*rmag**7) )
+
+        return [X[3], X[4], X[5], ddx, ddy, ddz]
+
+
+
+    Xprior = integrate.solve_ivp(prior_equation, t_span, X0, method="LSODA", t_eval=t).y
+
+    fig = plt.figure()
+    axs = GridSpec(3, 2, width_ratios=[1, 1])
+    axs_x = fig.add_subplot(axs[0, 1])
+    axs_y = fig.add_subplot(axs[1, 1], sharex=axs_x)
+    axs_z = fig.add_subplot(axs[2, 1], sharex=axs_x)
+    axs0 = fig.add_subplot(axs[:, 0], projection='3d')
+
+    axs_x.plot(t, x)
+    axs_x.plot(t, Xprior[0], linestyle="dashed")
+    axs_x.set_ylabel('x')
+
+    axs_y.plot(t, y)
+    axs_y.plot(t, Xprior[1], linestyle="dashed")
+    axs_y.set_ylabel('y')
+
+    axs_z.plot(t, z)
+    axs_z.plot(t, Xprior[2], linestyle="dashed")
+    axs_z.set_ylabel('z')
+    axs_z.set_xlabel('t')
+
+    axs0.plot(x, y, z, label="true")
+    axs0.plot(Xprior[0], Xprior[1], Xprior[2], label="prior", linestyle="dashed")
+
+    fig.legend()
+    plt.show()
+
+#Step 3: Create PIN-SINDy model
+
+
+#Step 4: Compare coefficients

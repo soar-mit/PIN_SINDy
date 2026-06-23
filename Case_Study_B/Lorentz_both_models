@@ -3,11 +3,11 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from SINDy_Source_Code.SINDyPySource import SINDY, theta, dmethods
+from SINDyPySource import SINDY, theta, dmethods
 
 #choose which output you would like to see:
-plot_results = True
-plot_error = False
+plot_results = False
+plot_error = True
 plot_true_vs_prior = False
 X0 = (1, 1, 1) # initial conditions that the model will use - NOT be trained on.
 
@@ -91,7 +91,7 @@ if plot_true_vs_prior:
 ######## generate PIN-SINDy model
 dmethod = dmethods(X, t)
 theta_instance = theta(X, 2)
-lbd_p = 1e3
+lbd_p = 5
 sindy_p = SINDY(dmethod, theta_instance, X, lbd_p)
 
 model_p = sindy_p.model(fi)
@@ -99,7 +99,7 @@ sol_p = sindy_p.simulate(t_span, X0, t, fi=fi)
 sol_px, sol_py, sol_pz = sol_p.y
 
 ######## generate SINDy model
-lbd_s = 1e-1
+lbd_s = 5
 sindy_s = SINDY(dmethod, theta_instance, X, lbd_s)
 
 model_s = sindy_s.model()

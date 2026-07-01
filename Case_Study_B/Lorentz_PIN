@@ -3,7 +3,7 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from SINDy_Source_Code.SINDyPySource import SINDY, theta, dmethods
+from SINDyPySource import SINDY, theta, dmethods
 
 # select what output you would like to see:
 add_noise = False
@@ -55,7 +55,7 @@ if add_noise:
 
 dmethod = dmethods(X, t)
 theta_instance = theta(X, 2)
-lbd = 5
+lbd = 1e3
 sindy = SINDY(dmethod, theta_instance, X, lbd, norm_optimization=True, threshold=.1)
 
 model = sindy.model(fi=fi)

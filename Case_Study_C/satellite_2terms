@@ -1,0 +1,369 @@
+from SINDyPySource import SINDY, theta, dmethods
+from scipy import integrate
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+import itertools
+from tabulate import tabulate
+from PIL import Image, ImageDraw, ImageFont
+
+
+# Goal: to find the density constant and synthetic atmospheric density constant in a
+#  hypothetical satellite orbit using SINDy and PIN-SINDy.
+# experiment: have SINDy try to make the other term, and have it already given the other term and have to find the coefficient.
+## step 0: define output
+plot_true_vs_prior = False
+plot_model = True
+plot_opt_lbd = False
+plot_error = False
+plot_coef_percent = False
+
+#step 1: define true and prior equation
+
+def orbital_equation(t, X):
+    # X = [x, y, z, dxdt, dydt, dzdt]
+    M = 5.972e24 # mass of earth
+    G = 6.6743e-11 # gravitational constant
+    R = 6.371e6 # radius of eart
+    J2 = 1.08263e-3 # perturbation coefficient
+    omega_E = np.array([0, 0, 7.2921e-5])
+    V = np.array([X[3], X[4], X[5]])
+    r = np.array([X[0], X[1], X[2]])
+    rmag = np.linalg.norm(X[:3], axis=0)
+    if rmag < R:
+        raise ValueError("Satellite went inside earth.")
+    Vrel = V - np.cross(omega_E, r)
+    Vrel_mag = (Vrel[0]**2 + Vrel[1]**2 + Vrel[2]**2)**(1/2)
+
+
+    ddx = (-M*G*X[0] / rmag**3
+    + (3*G*M*R**2*J2*X[0])*(5*X[2]**2/(rmag**2) - 1)/(2*rmag**5) )
+
+    ddy = (-M*G*X[1] / rmag**3
+    + (3*G*M*R**2*J2*X[1])*(5*X[2]**2/(rmag**2) - 1)/(2*rmag**5) )
+
+    ddz = (-M*G*X[2] / rmag**3
+    + (3*G*M*R**2*J2*X[2])*(5*X[2]**2/(rmag**2) - 3)/(2*rmag**5) )
+
+    return [X[3], X[4], X[5], ddx, ddy, ddz]
+
+
+# find initial conditions:
+
+# coefficients:
+
+M = 5.972e24
+G = 6.6743e-11
+R = 6.371e6
+J2 = 1.08263e-3
+r0 = np.array([7000e3, 0, 1000e3])
+rmag = np.linalg.norm(r0, axis=0)
+
+rhat = r0 / np.linalg.norm(r0)
+
+khat = np.array([0,0,1])
+
+vdir = np.cross(khat, rhat)
+vdir /= np.linalg.norm(vdir)
+
+v0 = np.sqrt(G*M/np.linalg.norm(r0)) * vdir
+
+X0 = [r0[0], r0[1], r0[2], v0[0], v0[1], v0[2]]
+#calculate period:
+T = 2*np.pi*(rmag**3 / (G*M))**(1/2)
+t_span = (0, int(T)+100)
+t = np.linspace(t_span[0], t_span[1], int(T)+100)
+
+x, y, z, dx, dy, dz = integrate.solve_ivp(orbital_equation, t_span, X0, method='LSODA', t_eval=t).y
+X = np.array([x, y, z, dx, dy, dz])
+
+if plot_true_vs_prior:
+    def prior_equation(t, X):
+        M = 5.972e24
+        G = 6.6743e-11
+        R = 6.371e6 # radius of earth
+        J2 = 1.08263e-3
+        rmag = np.linalg.norm(X[:3], axis=0)
+
+        ddx = -X[0] / (rmag**3)
+
+        ddy = -X[1] / (rmag**3)
+
+        ddz = -X[2] / (rmag**3)
+
+
+        return [X[3], X[4], X[5], ddx, ddy, ddz]
+
+
+
+    Xprior = integrate.solve_ivp(prior_equation, t_span, X0, method="LSODA", t_eval=t).y
+
+    fig = plt.figure()
+    axs = GridSpec(3, 2, width_ratios=[1, 1])
+    axs_x = fig.add_subplot(axs[0, 1])
+    axs_y = fig.add_subplot(axs[1, 1], sharex=axs_x)
+    axs_z = fig.add_subplot(axs[2, 1], sharex=axs_x)
+    axs0 = fig.add_subplot(axs[:, 0], projection='3d')
+
+    axs_x.plot(t, x)
+    axs_x.plot(t, Xprior[0], linestyle="dashed")
+    axs_x.set_ylabel('x')
+
+    axs_y.plot(t, y)
+    axs_y.plot(t, Xprior[1], linestyle="dashed")
+    axs_y.set_ylabel('y')
+
+    axs_z.plot(t, z)
+    axs_z.plot(t, Xprior[2], linestyle="dashed")
+    axs_z.set_ylabel('z')
+    axs_z.set_xlabel('t')
+
+    axs0.plot(x, y, z, label="true")
+    axs0.plot(Xprior[0], Xprior[1], Xprior[2], label="prior", linestyle="dashed")
+
+    fig.legend()
+    plt.show()
+
+#Step 3: Create theta matrix
+rmag = np.linalg.norm(X[:3], axis=0)
+
+
+theta_r3 = theta(X[0:3, :]/rmag**3, 3)
+theta_r5 = theta(X[0:3, :]/rmag**5, 3)
+theta_r7 = theta(X[0:3, :]/rmag**7, 3)
+theta_lib = np.zeros((57, int(T)+100))
+theta_lib[0:19,:] = theta_r3.library()
+theta_lib[19:38,:] = theta_r5.library()
+theta_lib[38:,:] = theta_r7.library()
+
+#Step 4: create PIN-SINDy and SINDy Models
+
+#true coefficients. Doesn't include xdot, ydot, zdot terms.
+true_coef = np.zeros((3, 57))
+true_coef[0, 0] = -G*M
+true_coef[0, 19] = -3*G*M*R**2*J2/2
+true_coef[0, 52] = 15*G*M*R**2*J2/2
+
+true_coef[1, 1] = -G*M
+true_coef[1, 20] = -3*G*M*R**2*J2/2
+true_coef[1, 55] = 15*G*M*R**2*J2/2
+
+true_coef[2, 2] = -G*M
+true_coef[2, 21] = -9*G*M*R**2*J2/2
+true_coef[2, 56] = 15*G*M*R**2*J2/2
+
+#prior coefficient matrix fi. Doesn't include
+fi = np.zeros((3, 57))
+fi[0, 0] = -1
+fi[1, 1] = -1
+fi[2, 2] = -1
+
+dmethod = dmethods(X[3:], t)
+sindy_pin = SINDY(dmethod, X[3:], theta_instance=None, custom_lib=theta_lib, lbd=.005)
+sindy = SINDY(dmethod, X[3:], theta_instance=None, custom_lib=theta_lib, lbd=.04 )
+
+coef_sindy = sindy.model()['coef']
+coef_pin = sindy_pin.model(fi)['coef']
+
+# create model and plot results
+
+if plot_model:
+
+    I = 3
+    K = 3
+    pwrs = []
+    for k in range(K+1):
+            for powers in itertools.combinations_with_replacement(range(I), k):
+                pwr = [0]*I
+                for i in powers:
+                    pwr[i] += 1
+                pwrs.append(pwr)
+
+    pwrs = np.array(pwrs)
+    pwrs.astype(np.float64)
+
+    def sindy_model(t, X):
+
+        theta_lib_r3 = []
+        theta_lib_r5 = []
+        theta_lib_r7 = []
+
+        r = np.array([X[0], X[1], X[2]])
+        rmag = np.linalg.norm(r, axis=0)
+
+        for p in pwrs:
+            assert len(p) == len(r), "oops! recalculate theta library."
+            term = 1.0
+            for i in range(3):
+                term *= X[i]**p[i]
+            theta_lib_r3.append(term/rmag**3)
+            theta_lib_r5.append(term/rmag**5)
+            theta_lib_r7.append(term/rmag**7)
+
+        theta_lib_r3 = theta_lib_r3[1:]
+        theta_lib_r5 = theta_lib_r5[1:]
+        theta_lib_r7 = theta_lib_r7[1:]
+
+        theta_vec = np.concatenate([theta_lib_r3, theta_lib_r5, theta_lib_r7])
+
+        forcing = np.array([np.dot(coef_sindy[i, :], theta_vec) for i in range(0, 3)])
+
+        return [X[3], X[4], X[5], forcing[0], forcing[1], forcing[2]]
+
+    sol_sindy = integrate.solve_ivp(sindy_model, t_span, X0, method="LSODA", t_eval=t).y
+
+    def pin_model(t, X):
+        theta_lib_r3 = []
+        theta_lib_r5 = []
+        theta_lib_r7 = []
+
+        r = np.array([X[0], X[1], X[2]])
+        rmag = np.linalg.norm(r, axis=0)
+
+        for p in pwrs:
+            assert len(p) == len(r), "oops! recalculate theta library."
+            term = 1.0
+            for i in range(3):
+                term *= X[i]**p[i]
+            theta_lib_r3.append(term/rmag**3)
+            theta_lib_r5.append(term/rmag**5)
+            theta_lib_r7.append(term/rmag**7)
+
+        theta_lib_r3 = theta_lib_r3[1:]
+        theta_lib_r5 = theta_lib_r5[1:]
+        theta_lib_r7 = theta_lib_r7[1:]
+
+        theta_vec = np.concatenate([theta_lib_r3, theta_lib_r5, theta_lib_r7])
+
+        forcing = np.array([np.dot(coef_pin[i, :], theta_vec) for i in range(0, 3)])
+
+        return [X[3], X[4], X[5], forcing[0], forcing[1], forcing[2]]
+
+
+    sol_pin = integrate.solve_ivp(pin_model, t_span, X0, method="LSODA", t_eval=t).y
+
+    #plot models:
+
+    fig = plt.figure()
+    ax0 = fig.add_subplot(121, projection='3d')
+    ax1 = fig.add_subplot(122, projection='3d')
+
+    ax0.plot(sol_sindy[0], sol_sindy[1], sol_sindy[2], label="SINDy model")
+    ax0.plot(X[0], X[1], X[2], label="actual")
+    ax0.legend()
+
+    ax1.plot(sol_pin[0], sol_pin[1], sol_pin[2], label="PIN-SINDy model")
+    ax1.plot(X[0], X[1], X[2], label="actual")
+    ax1.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+
+# build custom SINDy and PIN-SINDy model and find optimal lambda.
+
+if plot_opt_lbd:
+    lbds = np.logspace(-10, 1, 75)
+    zeta_sindy = []
+    zeta_pin = []
+
+    min_error_sindy = np.inf
+    opt_lbd_sindy = 0
+
+    min_error_pin = np.inf
+    opt_lbd_pin = 0
+
+    for lbd in lbds:
+        sindy = SINDY(dmethod, X[3:], theta_instance=None, custom_lib=theta_lib, norm_optimization=True, lbd=lbd)
+        coef_sindy = sindy.model()['coef']
+        coef_pin = sindy.model(fi)['coef']
+        sindy_norm = np.linalg.norm(coef_sindy, 2)
+
+        if sindy_norm != 0:
+            zeta_term_sindy = np.linalg.norm(coef_sindy - true_coef, 2) / sindy_norm
+            zeta_sindy.append(zeta_term_sindy)
+
+            if zeta_term_sindy <= min_error_sindy:
+                min_error_sindy = zeta_term_sindy
+                opt_lbd_sindy = lbd
+        else:
+            print(f'lambda causing sindy error: {lbd}.')
+            zeta_sindy.append(1000)
+
+        pin_norm = np.linalg.norm(coef_pin, 2)
+
+        if pin_norm != 0 :
+            zeta_term_pin = np.linalg.norm(coef_pin - true_coef, 2) / pin_norm
+            zeta_pin.append(zeta_term_pin)
+
+            if zeta_term_pin <= min_error_pin:
+                min_error_pin = zeta_term_pin
+                opt_lbd_pin = lbd
+        else:
+            print(f'lambda causing pin sindy error: {lbd}.')
+            zeta_pin.append(1000)
+
+    zeta_sindy = np.array(zeta_sindy)
+    zeta_pin = np.array(zeta_pin)
+
+    fix, axs = plt.subplots(2, 1)
+    axs[0].plot(lbds, zeta_sindy)
+    axs[0].plot(opt_lbd_sindy, min_error_sindy, marker='o', markersize=12)
+    axs[0].set_xscale('log')
+    axs[0].set_ylabel('normalized sindy coefficient error.')
+    axs[0].set_title(f'optimal lambda value is: {opt_lbd_sindy} with minimal error {min_error_sindy}.')
+
+    axs[1].plot(lbds, zeta_pin)
+    axs[1].plot(opt_lbd_pin, min_error_pin, marker='o', markersize=12)
+    axs[1].set_xlabel('lambda values')
+    axs[1].set_xscale('log')
+    axs[1].set_ylabel('normalized pin-sindy coefficient error.')
+    axs[1].set_title(f'optimal lambda value is: {opt_lbd_pin} with minimal error {min_error_pin}.')
+
+    plt.show()
+
+if plot_coef_percent:
+    def render_dict_as_table(data):
+        headers = data.keys()
+        rows = zip(*data.values())
+        table = tabulate(rows, headers=headers, tablefmt="fancy_grid")
+
+        # Create a new image with a white background
+        img_width, img_height = 800, 600
+        background_color = (255, 255, 255)  # White
+        table_color = (0, 0, 0)  # Black
+
+        line_spacing = 4
+        rows = table.split("\n")
+
+        image = Image.new("RGB", (img_width, img_height), background_color)
+        draw = ImageDraw.Draw(image)
+
+        # Render the table onto the image
+        y = 0
+        for row in rows:
+            draw.text((0, y), row, fill=table_color)
+            y += line_spacing
+
+        # Save the image as a PNG file
+        image.show()
+        image.save("table.png", "PNG")
+
+# Example dictionary
+## create list of coefficient error:
+    sindy_term_error = [abs(coef_sindy[0, 0]-true_coef[0,0]/true_coef[0,0]*100), abs(coef_sindy[1, 1]-true_coef[1,1]/true_coef[1,1]*100), abs(coef_sindy[2, 2]-true_coef[2,2]/true_coef[2,2]*100),
+                    abs(coef_sindy[0, 19]-true_coef[0,19]/true_coef[0,19]*100), abs(coef_sindy[1, 20]-true_coef[1,20]/true_coef[1,20]*100), abs(coef_sindy[2, 21]-true_coef[2,21]/true_coef[2,21]*100),
+                    abs(coef_sindy[0, 52]-true_coef[0,52]/true_coef[0,52]*100), abs(coef_sindy[1, 55]-true_coef[1,55]/true_coef[1,55]*100), abs(coef_sindy[2, 56]-true_coef[2,56]/true_coef[2,56]*100)]
+
+    pin_term_error = [abs(coef_pin[0, 0]-true_coef[0,0]/true_coef[0,0]*100), abs(coef_sindy[1, 1]-true_coef[1,1]/true_coef[1,1]*100), abs(coef_pin[2, 2]-true_coef[2,2]/true_coef[2,2]*100),
+                    abs(coef_pin[0, 19]-true_coef[0,19]/true_coef[0,19]*100), abs(coef_pin[1, 20]-true_coef[1,20]/true_coef[1,20]*100), abs(coef_pin[2, 21]-true_coef[2,21]/true_coef[2,21]*100),
+                    abs(coef_pin[0, 52]-true_coef[0,52]/true_coef[0,52]*100), abs(coef_pin[1, 55]-true_coef[1,55]/true_coef[1,55]*100), abs(coef_pin[2, 56]-true_coef[2,56]/true_coef[2,56]*100)]
+
+
+    data = {
+    'coefficient term': ['x/r^3', 'y/r^3', 'z/r^3', 'x/r^5', 'y/r^5', 'z/r^5', 'xz^2/r^7', 'yz^2/r^7'],
+    'SINDy coefficient error': sindy_term_error,
+    'PIN-SINDy coefficient error': pin_term_error
+}
+
+    render_dict_as_table(data)

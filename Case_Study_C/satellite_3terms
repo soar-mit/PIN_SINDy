@@ -10,7 +10,7 @@ from matplotlib.gridspec import GridSpec
 plot_true_vs_prior = True
 plot_results = True
 plot_opt_lbd = True
-y0 = [0, 0, 0, 0, 0, 0]  #model trained on X0 = (5, 5)
+y0 = [0, 0, 0, 0, 0, 0]  #
 
 
 #step 1: define true and prior equation

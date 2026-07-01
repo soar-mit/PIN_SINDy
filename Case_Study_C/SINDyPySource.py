@@ -122,16 +122,21 @@ class STLSQ:
 
 class SINDY:
 
-    def __init__(self, dmethod, theta_instance, var_list, lbd=.01, norm_optimization=False, threshold=None):
-        self.f = dmethod.forward_difference()
-        self.theta_lib = theta_instance.library()
+    def __init__(self, dmethod, var_list, theta_instance=None, custom_lib=None, lbd=.01, norm_optimization=False, threshold=None):
+        self.diff = dmethod.forward_difference()
+        if theta_instance:
+            self.theta_lib = theta_instance.library()
+            self.order = theta_instance.get_order()
+            self.theta = theta_instance
+        else:
+            self.theta_lib = custom_lib
+            self.order = None
+            self.theta = None
         self.var_list = np.array(var_list)
-        self.order = theta_instance.get_order()
-        self.theta = theta_instance
         self.lbd = lbd
         self.dmethod = dmethod
-        self.norm_optimization = norm_optimization
         self.threshold = threshold
+        self.norm_optimization = norm_optimization
 
 
     def get_coef(self, round_coef=True):
@@ -143,10 +148,10 @@ class SINDY:
 
     def model(self, fi=None):
         """creates differential equation system using sparse regression for state variables."""
-        f = self.f
+        diff = self.diff
         theta_lib = self.theta_lib
-        s = STLSQ(f, theta_lib, self.lbd)
-        coef = s.sparse_regression(fi, norm_optimization = self.norm_optimization, threshold=self.threshold)
+        s = STLSQ(diff, theta_lib, self.lbd)
+        coef = s.sparse_regression(fi, norm_optimization=self.norm_optimization, threshold=self.threshold)
         model = []
         for i in range(len(coef)):
             model_term = np.dot(theta_lib.T, coef[i])
@@ -159,25 +164,17 @@ class SINDY:
 
     def simulate(self, t_span, u0, t_data, method="LSODA", fi=None):
 
+        if self.theta:
+            pass
+        else:
+            raise ValueError("Building a custom theta matrix into the model means that you will have to build a custom simulation model.")
+
         pwrs = self.theta.get_powers()
         self.t_span = t_span
         self.u0 = u0
         self.t_data = t_data
 
-        f = self.f
-        theta_lib = self.theta_lib
-        s = STLSQ(f, theta_lib, self.lbd)
-        coef = s.sparse_regression(fi)
-
-        model = []
-        for i in range(len(coef)):
-            model_term = np.dot(theta_lib.T, coef[i])
-            model.append(model_term)
-        model = np.array(model)
-
-        #update self.coef
-        coef = np.array(coef)
-        self.coef = coef
+        coef = self.coef
 
         def f(t, y):
             """function version of library. Takes positional argument y(list of state variable floats, len = # of state variables, time t(float), and np array

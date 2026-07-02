@@ -15,8 +15,9 @@ from PIL import Image, ImageDraw, ImageFont
 plot_true_vs_prior = False
 plot_model = True
 plot_opt_lbd = False
-plot_error = False
-plot_coef_percent = False
+plot_opt_lbd_2 = False
+plot_error = True
+plot_coef_percent = True
 
 #step 1: define true and prior equation
 
@@ -85,11 +86,11 @@ if plot_true_vs_prior:
         J2 = 1.08263e-3
         rmag = np.linalg.norm(X[:3], axis=0)
 
-        ddx = -X[0] / (rmag**3)
+        ddx = -G*M*X[0] / (rmag**3)
 
-        ddy = -X[1] / (rmag**3)
+        ddy = -G*M*X[1] / (rmag**3)
 
-        ddz = -X[2] / (rmag**3)
+        ddz = -G*M*X[2] / (rmag**3)
 
 
         return [X[3], X[4], X[5], ddx, ddy, ddz]
@@ -154,20 +155,20 @@ true_coef[2, 56] = 15*G*M*R**2*J2/2
 
 #prior coefficient matrix fi. Doesn't include
 fi = np.zeros((3, 57))
-fi[0, 0] = -1
-fi[1, 1] = -1
-fi[2, 2] = -1
+fi[0, 0] = -G*M
+fi[1, 1] = -G*M
+fi[2, 2] = -G*M
 
-dmethod = dmethods(X[3:], t)
-sindy_pin = SINDY(dmethod, X[3:], theta_instance=None, custom_lib=theta_lib, lbd=.005)
-sindy = SINDY(dmethod, X[3:], theta_instance=None, custom_lib=theta_lib, lbd=.04 )
+dmethod = dmethods(X[0:3], t)
+sindy_pin = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, lbd=.23, norm_optimization=False, derivative=2)
+sindy = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, lbd=1.28, norm_optimization=False, derivative=2)
 
 coef_sindy = sindy.model()['coef']
 coef_pin = sindy_pin.model(fi)['coef']
 
 # create model and plot results
 
-if plot_model:
+def simulate_orbit(coef_s, coef_p):
 
     I = 3
     K = 3
@@ -206,7 +207,7 @@ if plot_model:
 
         theta_vec = np.concatenate([theta_lib_r3, theta_lib_r5, theta_lib_r7])
 
-        forcing = np.array([np.dot(coef_sindy[i, :], theta_vec) for i in range(0, 3)])
+        forcing = np.array([np.dot(coef_s[i, :], theta_vec) for i in range(0, 3)])
 
         return [X[3], X[4], X[5], forcing[0], forcing[1], forcing[2]]
 
@@ -235,28 +236,116 @@ if plot_model:
 
         theta_vec = np.concatenate([theta_lib_r3, theta_lib_r5, theta_lib_r7])
 
-        forcing = np.array([np.dot(coef_pin[i, :], theta_vec) for i in range(0, 3)])
+        forcing = np.array([np.dot(coef_p[i, :], theta_vec) for i in range(0, 3)])
 
         return [X[3], X[4], X[5], forcing[0], forcing[1], forcing[2]]
 
 
     sol_pin = integrate.solve_ivp(pin_model, t_span, X0, method="LSODA", t_eval=t).y
 
-    #plot models:
+    return {"sindy":sol_sindy, "pin":sol_pin}
+
+if plot_model:
+
+    sol_sindy = simulate_orbit(coef_sindy, coef_pin)["sindy"][:3]
+    sol_pin = simulate_orbit(coef_sindy, coef_pin)["pin"][:3]
 
     fig = plt.figure()
     ax0 = fig.add_subplot(121, projection='3d')
     ax1 = fig.add_subplot(122, projection='3d')
 
     ax0.plot(sol_sindy[0], sol_sindy[1], sol_sindy[2], label="SINDy model")
-    ax0.plot(X[0], X[1], X[2], label="actual")
+    ax0.plot(X[0], X[1], X[2], label="actual", linestyle="dashed")
     ax0.legend()
 
     ax1.plot(sol_pin[0], sol_pin[1], sol_pin[2], label="PIN-SINDy model")
-    ax1.plot(X[0], X[1], X[2], label="actual")
+    ax1.plot(X[0], X[1], X[2], label="actual", linestyle="dashed")
     ax1.legend()
     plt.tight_layout()
     plt.show()
+
+    if plot_error:
+        xs_error = abs((sol_sindy[0] - X[0]) / X[0])
+        ys_error = abs((sol_sindy[1] - X[1]) / X[1])
+        zs_error = abs((sol_sindy[2] - X[2]) / X[2])
+
+        xp_error = abs((sol_pin[0] - X[0]) / X[0])
+        yp_error = abs((sol_pin[1] - X[1]) / X[1])
+        zp_error = abs((sol_sindy[2] - X[2]) / X[2])
+
+        fig, axs = plt.subplots(3, 2)
+
+        axs[0, 0].plot(t, xs_error)
+        axs[0, 0].set_ylabel("sindy x error")
+
+        axs[1, 0].plot(t, xs_error)
+        axs[1, 0].set_ylabel("sindy y error")
+
+        axs[2, 0].plot(t, zs_error)
+        axs[2, 0].set_ylabel("sindy z error")
+        axs[2, 0].set_xlabel("t (sec)")
+
+        axs[0, 1].plot(t, xp_error)
+        axs[0, 1].set_ylabel("pin-sindy x error")
+
+        axs[1, 1].plot(t, yp_error)
+        axs[1, 1].set_ylabel("pin-sindy y error")
+
+        axs[2, 1].plot(t, zp_error)
+        axs[2, 1].set_ylabel("pin-sindy z error")
+        axs[2, 1].set_xlabel("t (sec)")
+
+        plt.tight_layout()
+        plt.show()
+
+    if plot_opt_lbd_2:
+        lbds = np.logspace(-9, -1, 75)
+
+        min_error_pin_2 = np.inf
+        opt_lbd_pin_2 = 0
+        sindy_error = []
+
+        min_error_sindy_2 = np.inf
+        opt_lbd_sindy_2 = 0
+        pin_error = []
+
+        for lbd in lbds:
+            # build model
+            sindy = SINDY(dmethod, X[3:], theta_instance=None, custom_lib=theta_lib, norm_optimization=True, lbd=lbd)
+            c_s = sindy.model()['coef']
+            c_p = sindy.model(fi)['coef']
+            sol_s = simulate_orbit(c_s, c_p)["sindy"][:3]
+            sol_p = simulate_orbit(c_s, c_p)["pin"][:3]
+
+            sample_s_error = abs(np.average(sol_s - X[:3]))
+            sample_p_error = abs(np.average(sol_s - X[:3]))
+
+            sindy_error.append(sample_s_error)
+            pin_error.append(sample_p_error)
+
+            if sample_s_error <= min_error_sindy_2:
+                min_error_sindy_2 = sample_s_error
+                opt_lbd_sindy_2 = lbd
+            if sample_p_error <= min_error_pin_2:
+                min_error_pin_2 = sample_p_error
+                opt_lbd_pin_2 = lbd
+
+        fig, axs = plt.subplots(2, 1)
+
+        axs[0].plot(lbd, np.array(sindy_error))
+        axs[0].set_ylabel("average sindy model error")
+        axs[0].set_xlabel("sample lambda values")
+        axs[0].set_xscale("log")
+        axs[0].plot(opt_lbd_sindy_2, min_error_sindy_2, marker='o', markersize='10')
+
+        axs[1].plot(lbd, np.array(pin_error))
+        axs[1].set_ylabel("average pin model error")
+        axs[1].set_xlabel("sample lambda values")
+        axs[1].set_xscale("log")
+        axs[1].plot(opt_lbd_pin_2, min_error_pin_2, marker='o', markersize='10')
+
+
+
 
 
 
@@ -323,47 +412,29 @@ if plot_opt_lbd:
     plt.show()
 
 if plot_coef_percent:
-    def render_dict_as_table(data):
-        headers = data.keys()
-        rows = zip(*data.values())
-        table = tabulate(rows, headers=headers, tablefmt="fancy_grid")
 
-        # Create a new image with a white background
-        img_width, img_height = 800, 600
-        background_color = (255, 255, 255)  # White
-        table_color = (0, 0, 0)  # Black
-
-        line_spacing = 4
-        rows = table.split("\n")
-
-        image = Image.new("RGB", (img_width, img_height), background_color)
-        draw = ImageDraw.Draw(image)
-
-        # Render the table onto the image
-        y = 0
-        for row in rows:
-            draw.text((0, y), row, fill=table_color)
-            y += line_spacing
-
-        # Save the image as a PNG file
-        image.show()
-        image.save("table.png", "PNG")
-
-# Example dictionary
 ## create list of coefficient error:
-    sindy_term_error = [abs(coef_sindy[0, 0]-true_coef[0,0]/true_coef[0,0]*100), abs(coef_sindy[1, 1]-true_coef[1,1]/true_coef[1,1]*100), abs(coef_sindy[2, 2]-true_coef[2,2]/true_coef[2,2]*100),
-                    abs(coef_sindy[0, 19]-true_coef[0,19]/true_coef[0,19]*100), abs(coef_sindy[1, 20]-true_coef[1,20]/true_coef[1,20]*100), abs(coef_sindy[2, 21]-true_coef[2,21]/true_coef[2,21]*100),
-                    abs(coef_sindy[0, 52]-true_coef[0,52]/true_coef[0,52]*100), abs(coef_sindy[1, 55]-true_coef[1,55]/true_coef[1,55]*100), abs(coef_sindy[2, 56]-true_coef[2,56]/true_coef[2,56]*100)]
+    sindy_term_error = [abs((coef_sindy[0, 0]-true_coef[0,0])/true_coef[0,0]*100), abs((coef_sindy[1, 1]-true_coef[1,1])/true_coef[1,1]*100), abs((coef_sindy[2, 2]-true_coef[2,2])/true_coef[2,2]*100),
+                    abs((coef_sindy[0, 19]-true_coef[0,19])/true_coef[0,19]*100), abs((coef_sindy[1, 20]-true_coef[1,20])/true_coef[1,20]*100), abs((coef_sindy[2, 21]-true_coef[2,21])/true_coef[2,21]*100),
+                    abs((coef_sindy[0, 52]-true_coef[0,52])/true_coef[0,52]*100), abs((coef_sindy[1, 55]-true_coef[1,55])/true_coef[1,55]*100), abs((coef_sindy[2, 56]-true_coef[2,56])/true_coef[2,56]*100)]
 
-    pin_term_error = [abs(coef_pin[0, 0]-true_coef[0,0]/true_coef[0,0]*100), abs(coef_sindy[1, 1]-true_coef[1,1]/true_coef[1,1]*100), abs(coef_pin[2, 2]-true_coef[2,2]/true_coef[2,2]*100),
-                    abs(coef_pin[0, 19]-true_coef[0,19]/true_coef[0,19]*100), abs(coef_pin[1, 20]-true_coef[1,20]/true_coef[1,20]*100), abs(coef_pin[2, 21]-true_coef[2,21]/true_coef[2,21]*100),
-                    abs(coef_pin[0, 52]-true_coef[0,52]/true_coef[0,52]*100), abs(coef_pin[1, 55]-true_coef[1,55]/true_coef[1,55]*100), abs(coef_pin[2, 56]-true_coef[2,56]/true_coef[2,56]*100)]
+    sindy_term = [coef_sindy[0, 0], coef_sindy[1, 1], coef_sindy[2, 2],
+                    coef_sindy[0, 19], coef_sindy[1, 20], coef_sindy[2, 21],
+                   coef_sindy[0, 52], coef_sindy[1, 55], coef_sindy[2, 56]]
 
+    true_term = [true_coef[0, 0], true_coef[1, 1], true_coef[2, 2],
+                    true_coef[0, 19], true_coef[1, 20], true_coef[2, 21],
+                   true_coef[0, 52], true_coef[1, 55], true_coef[2, 56]]
 
-    data = {
-    'coefficient term': ['x/r^3', 'y/r^3', 'z/r^3', 'x/r^5', 'y/r^5', 'z/r^5', 'xz^2/r^7', 'yz^2/r^7'],
-    'SINDy coefficient error': sindy_term_error,
-    'PIN-SINDy coefficient error': pin_term_error
-}
+    pin_term_error = [abs((coef_pin[0, 0]-true_coef[0,0])/true_coef[0,0]*100), abs((coef_pin[1, 1]-true_coef[1,1])/true_coef[1,1]*100), abs((coef_pin[2, 2]-true_coef[2,2])/true_coef[2,2]*100),
+                    abs((coef_pin[0, 19]-true_coef[0,19])/true_coef[0,19]*100), abs((coef_pin[1, 20]-true_coef[1,20])/true_coef[1,20]*100), abs((coef_pin[2, 21]-true_coef[2,21])/true_coef[2,21]*100),
+                    abs((coef_pin[0, 52]-true_coef[0,52])/true_coef[0,52]*100), abs((coef_pin[1, 55]-true_coef[1,55])/true_coef[1,55]*100), abs((coef_pin[2, 56]-true_coef[2,56])/true_coef[2,56]*100)]
 
-    render_dict_as_table(data)
+    pin_term = [coef_pin[0, 0], coef_pin[1, 1], coef_pin[2, 2],
+                coef_pin[0, 19], coef_pin[1, 20], coef_pin[2, 21],
+                coef_pin[0, 52], coef_pin[1, 55], coef_pin[2, 56]]
+
+    coef_term = ['x/r^3', 'y/r^3', 'z/r^3', 'x/r^5', 'y/r^5', 'z/r^5', 'xz^2/r^7', 'yz^2/r^7', 'z^3/r^7']
+
+    for i in range(len(sindy_term_error)):
+        print(f"coefficient error for the library term {coef_term[i]}. SINDy term: {sindy_term[i]}. true term: {true_term[i]}. pin sindy term: {pin_term[i]}. pin sindy percent error: {pin_term_error[i]}%. sindy percent error: {sindy_term_error[i]}% ")

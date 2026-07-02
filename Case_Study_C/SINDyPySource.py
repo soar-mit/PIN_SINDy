@@ -5,8 +5,6 @@ import itertools
 from scipy.signal import savgol_filter
 import os
 
-print("Current place of this file:" + os.getcwd())
-
 class theta:
     def __init__(self, var_list, order):
         self.var_list = np.array(var_list)
@@ -71,6 +69,32 @@ class dmethods:
         f = np.array(f)
         f = np.clip(f, -1e6, 1e6)
         return f
+
+    def second_differential(self, var):
+        """
+        computes second derivative forward difference for the first index of var, backwards difference for the last index of var,
+        and central difference for all other indices of var.
+        """
+        var_2f = np.zeros((len(var)))
+        var_2f[0] = (var[2] - 2*var[1] + var[0])/self.dt**2 #forward difference
+
+        for i in range(1, len(var)-1):
+            var_2f[i] = (var[i+1] - 2*var[i] + var[i-1])/self.dt**2 # central difference
+
+        var_2f[-1] = (var[-1] - 2*var[-2] + var[-3])/self.dt**2
+
+        return var_2f
+
+
+
+    def second_forward_difference(self):
+        rows, columns = self.x.shape ## x shape: state variables x time steps
+        x_2f = np.zeros((rows, columns))
+        for i in range(rows):
+            x_2f[i, :] = self.second_differential(self.x[i,:])
+        return x_2f
+
+
 class STLSQ:
 
     def __init__(self, diff, theta_lib, lbd=.01):
@@ -85,7 +109,7 @@ class STLSQ:
         self.lbd = lbd
         self.theta_lib = theta_lib
 
-    def sparse_regression(self, fi=None, norm_optimization=False, threshold=None):
+    def sparse_regression(self, norm_optimization, fi, threshold=None):
         """returns the final coefficients for the system using pure SINDy (fi=None) or PIN-SINDy."""
         diff = self.diff
         theta_lib = self.theta_lib
@@ -122,8 +146,11 @@ class STLSQ:
 
 class SINDY:
 
-    def __init__(self, dmethod, var_list, theta_instance=None, custom_lib=None, lbd=.01, norm_optimization=False, threshold=None):
-        self.diff = dmethod.forward_difference()
+    def __init__(self, dmethod, var_list, theta_instance=None, custom_lib=None, lbd=.01, norm_optimization=True, threshold=None, derivative=1):
+        if derivative == 1:
+            self.diff = dmethod.forward_difference()
+        if derivative ==2:
+            self.diff = dmethod.second_forward_difference()
         if theta_instance:
             self.theta_lib = theta_instance.library()
             self.order = theta_instance.get_order()
@@ -151,7 +178,7 @@ class SINDY:
         diff = self.diff
         theta_lib = self.theta_lib
         s = STLSQ(diff, theta_lib, self.lbd)
-        coef = s.sparse_regression(fi, norm_optimization=self.norm_optimization, threshold=self.threshold)
+        coef = s.sparse_regression(self.norm_optimization, fi, threshold=self.threshold)
         model = []
         for i in range(len(coef)):
             model_term = np.dot(theta_lib.T, coef[i])

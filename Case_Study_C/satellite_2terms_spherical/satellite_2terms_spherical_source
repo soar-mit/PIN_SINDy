@@ -1,0 +1,251 @@
+from SINDyPySource import SINDY, dmethods
+from scipy import integrate
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+
+
+# Goal: to find the density constant and synthetic atmospheric density constant in a
+#  hypothetical satellite orbit using SINDy and PIN-SINDy.
+#step 0: determine which output you would like to see.
+plot_true_vs_prior = True
+
+#step 1: define true and prior equation
+
+def orbital_equation(t, X):
+    # X = [r theta, phi, dr, dtheta, dphi]
+    M = 5.972e24 # mass of earth
+    G = 6.6743e-11 # gravitational constant
+    R = 6.371e6 # radius of eart
+    J2 = 1.08263e-3 # perturbation coefficient
+    if X[0] < R:
+        raise ValueError("Satellite went inside earth.")
+
+    r = X[0]
+    thet = X[1]
+    phi = X[2]
+    dr = X[3]
+    dthet = X[4]
+    dphi = X[5]
+
+    ddr = (
+        r*(dthet**2 + np.sin(thet)**2*dphi**2)
+        - G*M/r**2
+        + 3*G*M*J2*R**2*(3*np.cos(thet)**2 - 1)/(2*r**4)
+    )
+
+    ddtheta = (
+    -2*dr*dthet/r
+    + np.sin(thet)*np.cos(thet)*dphi**2
+    + 3*G*M*J2*R**2*np.sin(thet)*np.cos(thet)/r**5
+    )
+
+    ddphi = -2*dr*dphi/r - 2*dthet*dphi/np.tan(thet)
+
+    return [X[3], X[4], X[5], ddr, ddtheta, ddphi]
+
+print("step 1 complete.")
+# step 2: find initial conditions:
+
+M = 5.972e24
+G = 6.6743e-11
+R = 6.371e6
+J2 = 1.08263e-3
+
+r0 =7078e3
+theta0 = np.deg2rad(60)
+
+X0 = [r0, theta0, 0, 0, 0, ((G*M/(7078e3)**3)**.5)/np.sin(theta0)]
+
+#calculate period:
+T = 2*np.pi*(X0[0]**3 / (G*M))**(1/2)
+t_span = (0, int(T)+100)
+t = np.linspace(t_span[0], t_span[1], int(T)+100)
+
+r, thet, phi, dr , dthet, dphi = integrate.solve_ivp(orbital_equation, t_span, X0, method='LSODA', t_eval=t).y
+X = np.array([r, thet, phi, dr, dthet, dphi])
+
+print("step 2 complete.")
+#Step 3: Create theta matrix
+theta_lib = np.zeros((10, int(T)+100))
+theta_lib[0,:] = r*dthet**2
+theta_lib[1,:] = r*np.sin(thet)**2*dphi**2
+theta_lib[2,:] = r**(-2)
+theta_lib[3,:] = np.cos(thet)**2/r**4
+theta_lib[4,:] = r**(-4)
+theta_lib[5,:] = dr*dthet/r
+theta_lib[6,:] = np.sin(thet)*np.cos(thet)*dphi**2
+theta_lib[7,:] = np.sin(thet)*np.cos(thet)/r**5
+theta_lib[8,:] = dr*dphi/r
+theta_lib[9,:] = dthet*dphi/np.tan(thet)
+
+
+print("step 3 complete.")
+#Step 4: create PIN-SINDy and SINDy Models
+
+#true coefficients. Doesn't include xdot, ydot, zdot terms.
+true_coef = np.zeros((3,10))
+true_coef[0, 0] = 1
+true_coef[0, 1] = 1
+true_coef[0, 2] = -G*M
+true_coef[0, 3] = 9*G*M*J2*R**2/2
+true_coef[0, 4] = -3*G*M*J2*R**2/2
+
+true_coef[1, 5] = -2
+true_coef[1, 6] = 1
+true_coef[1, 7] = 3*G*M*R**2*J2
+
+true_coef[2, 8] = -2
+true_coef[2, 9] = -2
+
+#prior coefficient matrix fi. Doesn't include J2 oblation terms or coef.
+fi = np.zeros((3,10))
+fi[0, 0] = 1
+fi[0, 1] = 1
+fi[0, 2] = -G*M
+
+fi[1, 5] = -2
+fi[1, 6] = 1
+
+fi[2, 8] = -2
+fi[2, 9] = -2
+
+dmethod = dmethods(X[0:3], t)
+sindy_pin = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, lbd=0.12, norm_optimization=False, derivative=2)
+sindy = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, lbd=0.46, norm_optimization=False, derivative=2)
+
+coef_sindy = sindy.model()['coef']
+coef_pin = sindy_pin.model(fi)['coef']
+
+print("step 4 complete.")
+
+# step 5: create simulation function
+
+def simulate_orbit(coef_s, coef_p):
+
+    def sindy_model(t, X):
+
+        r = X[0]
+        thet = X[1]
+        phi = X[2]
+        dr = X[3]
+        dthet = X[4]
+        dphi = X[5]
+
+        theta_lib = np.array([
+        r*dthet**2,
+        r*np.sin(thet)**2*dphi**2,
+        r**-2,
+        np.cos(thet)**2/r**4,
+        r**-4,
+        dr*dthet/r,
+        np.sin(thet)*np.cos(thet)*dphi**2,
+        np.sin(thet)*np.cos(thet)/r**5,
+        dr*dphi/r,
+        dthet*dphi/np.tan(thet)
+        ])
+
+        forcing = coef_s @ theta_lib
+
+        return [X[3], X[4], X[5], forcing[0], forcing[1], forcing[2]]
+
+    sol_sindy = integrate.solve_ivp(sindy_model, t_span, X0, method="LSODA", t_eval=t).y
+
+    def pin_model(t, X):
+
+        r = X[0]
+        thet = X[1]
+        phi = X[2]
+        dr = X[3]
+        dthet = X[4]
+        dphi = X[5]
+
+        theta_lib = np.array([
+                r*dthet**2,
+                r*np.sin(thet)**2*dphi**2,
+                r**-2,
+                np.cos(thet)**2/r**4,
+                r**-4,
+                dr*dthet/r,
+                np.sin(thet)*np.cos(thet)*dphi**2,
+                np.sin(thet)*np.cos(thet)/r**5,
+                dr*dphi/r,
+                dthet*dphi/np.tan(thet)
+        ])
+
+        forcing = coef_p @ theta_lib
+
+        return [X[3], X[4], X[5], forcing[0], forcing[1], forcing[2]]
+
+
+    sol_pin = integrate.solve_ivp(pin_model, t_span, X0, method="LSODA", t_eval=t).y
+
+    return {"sindy":sol_sindy, "pin":sol_pin}
+
+print("step 5 complete.")
+
+if plot_true_vs_prior:
+    def prior_equation(t, X):
+        M = 5.972e24
+        G = 6.6743e-11
+        R = 6.371e6 # radius of earth
+
+        if X[0] < R:
+            raise ValueError("Satellite went inside earth.")
+
+        r = X[0]
+        thet = X[1]
+        phi = X[2]
+        dr = X[3]
+        dthet = X[4]
+        dphi = X[5]
+
+        ddr = (
+        r*(dthet**2 + np.sin(thet)**2*dphi**2)
+        - G*M/r**2)
+
+        ddtheta = (
+        -2*dr*dthet/r
+        + np.sin(thet)*np.cos(thet)*dphi**2)
+
+        ddphi = -2*dr*dphi/r - 2*dthet*dphi/np.tan(thet)
+
+        return [X[3], X[4], X[5], ddr, ddtheta, ddphi]
+
+
+
+    Xprior = integrate.solve_ivp(prior_equation, t_span, X0, method="LSODA", t_eval=t).y
+
+    x = r*np.cos(phi)*np.sin(thet)
+    y = r*np.sin(phi)*np.sin(thet)
+    z = r*np.cos(thet)
+
+    xp = Xprior[0]*np.cos(Xprior[2])*np.sin(Xprior[1])
+    yp = Xprior[0]*np.sin(Xprior[1])*np.sin(Xprior[2])
+    zp = Xprior[0]*np.cos(Xprior[1])
+
+    fig = plt.figure()
+    axs = GridSpec(3, 2, width_ratios=[1, 1])
+    axs_x = fig.add_subplot(axs[0, 1])
+    axs_y = fig.add_subplot(axs[1, 1], sharex=axs_x)
+    axs_z = fig.add_subplot(axs[2, 1], sharex=axs_x)
+    axs0 = fig.add_subplot(axs[:, 0], projection='3d')
+
+    axs_x.plot(t, x)
+    axs_x.plot(t, xp, linestyle="dashed")
+    axs_x.set_ylabel('x')
+
+    axs_y.plot(t, y)
+    axs_y.plot(t, yp, linestyle="dashed")
+    axs_y.set_ylabel('y')
+
+    axs_z.plot(t, z)
+    axs_z.plot(t, zp, linestyle="dashed")
+    axs_z.set_ylabel('z')
+    axs_z.set_xlabel('t')
+
+    axs0.plot(x, y, z, label="true")
+    axs0.plot(xp, yp, zp, label="prior", linestyle="dashed")
+
+    fig.legend()
+    plt.show()

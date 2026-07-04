@@ -2,7 +2,7 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import integrate
-from Case_Study_C.SINDyPySource import theta, dmethods, SINDY
+from Case_Study_C.satellite_2terms_spherical.SINDyPySource import theta, dmethods, SINDY
 
 # #create toy problem:
 

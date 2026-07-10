@@ -94,6 +94,53 @@ class dmethods:
             x_2f[i, :] = self.second_differential(self.x[i,:])
         return x_2f
 
+    def order_2_differential(self, var):
+        "computes first derivative to the SECOND ORDER of error (second order for first and last, "
+        "fourth order for all others.)"
+
+        dt = self.dt
+
+        var_1 = np.zeros((len(var)))
+        var_1[0] = (-25*var[0] + 48*var[1] - 36*var[2] + 26*var[3] - 3*var[4])/(12*dt)
+        var_1[1] = (-25*var[1] + 48*var[2] - 36*var[3] + 26*var[4] - 3*var[5])/(12*dt)
+
+        for i in range(2, len(var)-2):
+            var_1[i] = (-var[i+2] + 8*var[i] - 8*var[i-1] + var[i-2])/(12*dt)
+
+        var_1[-2] = (25*var[-2] - 48*var[-3] + 36*var[-4] - 16*var[-5] + 3*var[-6])/(12*dt)
+        var_1[-1] = (25*var[-1] - 48*var[-2] + 36*var[-3] - 16*var[-4] + 3*var[-5])/(12*dt)
+
+        return var_1
+
+    def order_2_forward_difference(self):
+        rows, columns = self.x.shape
+        x_1 = np.zeros((rows, columns))
+        for i in range(rows):
+            x_1[i,:] = self.order_2_differential(self.x[i,:])
+        return x_1
+
+    def order_2_second_differential(self, var):
+        dt = self.dt
+
+        var_2f = np.zeros((len(var)))
+
+        var_2f[0] = (2*var[0] - 5*var[1] + 4*var[2] - var[3])/(dt**3)
+        var_2f[1] = (2*var[1] - 5*var[2] + 4*var[3] - var[4])/(dt**3)
+
+        for i in range(2, len(var)-2):
+            var_2f[i] = (-var[i+2] + 16*var[i+1] - 30*var[i] + 16*var[i-1] - var[i-2])/(12*dt**2)
+
+        var_2f[-2] = (2*var[-2] - 5*var[-3] + 4*var[-4] - var[-5])/(dt**3)
+        var_2f[-1] = (2*var[-1] - 5*var[-2] + 4*var[-3] - var[-4])/(dt**3)
+        return var_2f
+
+    def order_2_second_forward_difference(self):
+        rows, columns = self.x.shape
+        x_2 = np.zeros((rows, columns))
+        for i in range(rows):
+            x_2[i,:] = self.order_2_second_differential(self.x[i,:])
+        return x_2
+
 
 class STLSQ:
 
@@ -151,6 +198,10 @@ class SINDY:
             self.diff = dmethod.forward_difference()
         if derivative ==2:
             self.diff = dmethod.second_forward_difference()
+        if derivative ==3:
+            self.diff = dmethod.order_2_forward_difference()
+        if derivative == 4:
+            self.diff = dmethod.order_2_second_forward_difference()
         if theta_instance:
             self.theta_lib = theta_instance.library()
             self.order = theta_instance.get_order()

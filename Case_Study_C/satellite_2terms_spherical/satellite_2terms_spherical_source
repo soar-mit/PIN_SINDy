@@ -8,7 +8,12 @@ from matplotlib.gridspec import GridSpec
 # Goal: to find the density constant and synthetic atmospheric density constant in a
 #  hypothetical satellite orbit using SINDy and PIN-SINDy.
 #step 0: determine which output you would like to see.
-plot_true_vs_prior = True
+plot_true_vs_prior = False
+opt_lbd = True
+plot_error = False
+plot_model = False
+show_coef_error = False
+repeat = 1
 
 #step 1: define true and prior equation
 
@@ -17,7 +22,7 @@ def orbital_equation(t, X):
     M = 5.972e24 # mass of earth
     G = 6.6743e-11 # gravitational constant
     R = 6.371e6 # radius of eart
-    J2 = 1.08263e-3 # perturbation coefficient
+    J2 = 1.08263e1 # perturbation coefficient
     if X[0] < R:
         raise ValueError("Satellite went inside earth.")
 
@@ -50,24 +55,30 @@ print("step 1 complete.")
 M = 5.972e24
 G = 6.6743e-11
 R = 6.371e6
-J2 = 1.08263e-3
+J2 = 1.08263e1
 
-r0 =7078e3
+r0 =7078e6
 theta0 = np.deg2rad(60)
 
-X0 = [r0, theta0, 0, 0, 0, ((G*M/(7078e3)**3)**.5)/np.sin(theta0)]
+X0 = [r0, theta0, 0, 0, 0, ((G*M/(r0)**3)**.5)/np.sin(theta0)]
 
 #calculate period:
 T = 2*np.pi*(X0[0]**3 / (G*M))**(1/2)
-t_span = (0, int(T)+100)
-t = np.linspace(t_span[0], t_span[1], int(T)+100)
+t_span = (0, 1*(int(T)+100))
+t = np.linspace(t_span[0], t_span[1], 2*(int(T)+100))
 
 r, thet, phi, dr , dthet, dphi = integrate.solve_ivp(orbital_equation, t_span, X0, method='LSODA', t_eval=t).y
 X = np.array([r, thet, phi, dr, dthet, dphi])
 
+x = r*np.cos(phi)*np.sin(thet)
+y = r*np.sin(phi)*np.sin(thet)
+z = r*np.cos(thet)
+
 print("step 2 complete.")
+
+
 #Step 3: Create theta matrix
-theta_lib = np.zeros((10, int(T)+100))
+theta_lib = np.zeros((10, 2*(int(T)+100)))
 theta_lib[0,:] = r*dthet**2
 theta_lib[1,:] = r*np.sin(thet)**2*dphi**2
 theta_lib[2,:] = r**(-2)
@@ -111,15 +122,15 @@ fi[2, 8] = -2
 fi[2, 9] = -2
 
 dmethod = dmethods(X[0:3], t)
-sindy_pin = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, lbd=0.12, norm_optimization=False, derivative=2)
-sindy = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, lbd=0.46, norm_optimization=False, derivative=2)
+sindy_pin = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, norm_optimization=False, derivative=4, lbd=1)
+sindy = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, norm_optimization=False, derivative=4, lbd=1)
 
 coef_sindy = sindy.model()['coef']
 coef_pin = sindy_pin.model(fi)['coef']
 
 print("step 4 complete.")
 
-# step 5: create simulation function
+# step 5: simulate function
 
 def simulate_orbit(coef_s, coef_p):
 
@@ -216,10 +227,6 @@ if plot_true_vs_prior:
 
     Xprior = integrate.solve_ivp(prior_equation, t_span, X0, method="LSODA", t_eval=t).y
 
-    x = r*np.cos(phi)*np.sin(thet)
-    y = r*np.sin(phi)*np.sin(thet)
-    z = r*np.cos(thet)
-
     xp = Xprior[0]*np.cos(Xprior[2])*np.sin(Xprior[1])
     yp = Xprior[0]*np.sin(Xprior[1])*np.sin(Xprior[2])
     zp = Xprior[0]*np.cos(Xprior[1])
@@ -249,3 +256,129 @@ if plot_true_vs_prior:
 
     fig.legend()
     plt.show()
+
+if opt_lbd:
+    lbds = np.logspace(-3, 0, 50)
+    zeta_sindy = []
+    zeta_pin = []
+
+    min_error_sindy = np.inf
+    opt_lbd_sindy = 0
+
+    min_error_pin = np.inf
+    opt_lbd_pin = 0
+
+    for lbd in lbds:
+        sindy = SINDY(dmethod, X[3:], theta_instance=None, custom_lib=theta_lib, norm_optimization=True, lbd=lbd)
+        coef_sindy = sindy.model()['coef']
+        coef_pin = sindy.model(fi)['coef']
+        sindy_norm = np.linalg.norm(coef_sindy, 2)
+
+        if sindy_norm != 0:
+            zeta_term_sindy = np.linalg.norm(coef_sindy - true_coef, 2) / sindy_norm
+            zeta_sindy.append(zeta_term_sindy)
+
+            if zeta_term_sindy <= min_error_sindy:
+                min_error_sindy = zeta_term_sindy
+                opt_lbd_sindy = lbd
+        else:
+            print(f'lambda causing sindy error: {lbd}.')
+            zeta_sindy.append(1000)
+
+        pin_norm = np.linalg.norm(coef_pin, 2)
+
+        if pin_norm != 0 :
+            zeta_term_pin = np.linalg.norm(coef_pin - true_coef, 2) / pin_norm
+            zeta_pin.append(zeta_term_pin)
+
+            if zeta_term_pin <= min_error_pin:
+                min_error_pin = zeta_term_pin
+                opt_lbd_pin = lbd
+        else:
+            print(f'lambda causing pin sindy error: {lbd}.')
+            zeta_pin.append(1000)
+
+    zeta_sindy = np.array(zeta_sindy)
+    zeta_pin = np.array(zeta_pin)
+
+    fix, axs = plt.subplots(2, 1)
+    axs[0].plot(lbds, zeta_sindy)
+    axs[0].plot(opt_lbd_sindy, min_error_sindy, marker='o', markersize=12)
+    axs[0].set_xscale('log')
+    axs[0].set_ylabel('normalized sindy coefficient error.')
+    axs[0].set_title(f'optimal lambda value is: {opt_lbd_sindy} with minimal error {min_error_sindy}.')
+
+    axs[1].plot(lbds, zeta_pin)
+    axs[1].plot(opt_lbd_pin, min_error_pin, marker='o', markersize=12)
+    axs[1].set_xlabel('lambda values')
+    axs[1].set_xscale('log')
+    axs[1].set_ylabel('normalized pin-sindy coefficient error.')
+    axs[1].set_title(f'optimal lambda value is: {opt_lbd_pin} with minimal error {min_error_pin}.')
+
+    plt.show()
+
+if plot_model:
+
+    sol_sindy = simulate_orbit(coef_sindy, coef_pin)["sindy"][:3]
+    sol_pin = simulate_orbit(coef_sindy, coef_pin)["pin"][:3]
+
+    fig = plt.figure()
+    ax0 = fig.add_subplot(121, projection='3d')
+    ax1 = fig.add_subplot(122, projection='3d')
+
+    xs = sol_sindy[0]*np.cos(sol_sindy[2])*np.sin(sol_sindy[1])
+    ys = sol_sindy[0]*np.sin(sol_sindy[2])*np.sin(sol_sindy[1])
+    zs = sol_sindy[0]*np.cos(sol_sindy[1])
+
+    xp = sol_pin[0]*np.cos(sol_pin[2])*np.sin(sol_pin[1])
+    yp = sol_pin[0]*np.sin(sol_pin[2])*np.sin(sol_pin[1])
+    zp = sol_pin[0]*np.cos(sol_pin[1])
+
+
+    ax0.plot(xs, ys, zs, label="SINDy model")
+    ax0.plot(x, y, z, label="actual", linestyle="dashed")
+    ax0.legend()
+
+    ax1.plot(xp, yp, zp, label="PIN-SINDy model")
+    ax1.plot(x, y, z, label="actual", linestyle="dashed")
+    ax1.legend()
+    plt.tight_layout()
+    plt.show()
+
+if plot_error:
+    rs_error = abs((sol_sindy[0] - X[0]) / X[0])
+    thetas_error = abs((sol_sindy[1] - X[1]) / X[1])
+    phis_error = abs((sol_sindy[2] - X[2]) / X[2])
+
+    rp_error = abs((sol_pin[0] - X[0]) / X[0])
+    thetap_error = abs((sol_pin[1] - X[1]) / X[1])
+    phip_error = abs((sol_sindy[2] - X[2]) / X[2])
+
+    fig, axs = plt.subplots(3, 2)
+
+    axs[0, 0].plot(t, rs_error)
+    axs[0, 0].set_ylabel("sindy r error")
+
+    axs[1, 0].plot(t, thetas_error)
+    axs[1, 0].set_ylabel("sindy theta error")
+
+    axs[2, 0].plot(t, phis_error)
+    axs[2, 0].set_ylabel("sindy phi  error")
+    axs[2, 0].set_xlabel("t (sec)")
+
+    axs[0, 1].plot(t, rp_error)
+    axs[0, 1].set_ylabel("pin-sindy r error")
+
+    axs[1, 1].plot(t, thetap_error)
+    axs[1, 1].set_ylabel("pin-sindy theta error")
+
+    axs[2, 1].plot(t, phip_error)
+    axs[2, 1].set_ylabel("pin-sindy phi error")
+    axs[2, 1].set_xlabel("t (sec)")
+
+    plt.tight_layout()
+    plt.show()
+
+print(f"true coef: {true_coef}")
+print(f"sindy coef: {coef_sindy}")
+print(f"pin coef: {coef_pin}")

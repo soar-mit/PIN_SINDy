@@ -10,13 +10,13 @@ from matplotlib.gridspec import GridSpec
 #step 0: determine which output you would like to see.
 plot_true_vs_prior = False
 print_true_coef = False
-opt_lbd_coef = False
-plot_error = True
-plot_model = True
-show_coef_error = True
+opt_lbd_coef = True
+plot_error = False
+plot_model = False
+show_coef_error = False
 opt_lbd_sim = True
-print_sindy_coef = True
-print_pin_coef = True
+print_sindy_coef = False
+print_pin_coef = False
 
 #step 1: define true and prior equation
 
@@ -25,7 +25,7 @@ def orbital_equation(t, X):
     M = 5.972e24 # mass of earth
     G = 6.6743e-11 # gravitational constant
     R = 6.371e6 # radius of eart
-    J2 = 1.08263e-2 # perturbation coefficient
+    J2 = 1.08263e-1 # perturbation coefficient
     if X[0] < R:
         raise ValueError("Satellite went inside earth.")
 
@@ -58,7 +58,7 @@ print("step 1 complete.")
 M = 5.972e24
 G = 6.6743e-11
 R = 6.371e6
-J2 = 1.08263e-2
+J2 = 1.08263e-1
 
 r0 =7.078e6
 theta0 = np.deg2rad(30)
@@ -125,8 +125,8 @@ fi[2, 8] = -2
 fi[2, 9] = -2
 
 dmethod = dmethods(X[0:3], t)
-sindy_pin = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, norm_optimization=False, derivative=4, lbd=1e-3)
-sindy = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, norm_optimization=False, derivative=4, lbd=1e-3)
+sindy_pin = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, norm_optimization=False, derivative=4, lbd=.12)
+sindy = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, norm_optimization=False, derivative=4, lbd=.003)
 
 coef_sindy = sindy.model()['coef']
 coef_pin = sindy_pin.model(fi)['coef']
@@ -386,7 +386,69 @@ if plot_error:
     plt.show()
 
 if opt_lbd_sim == True:
-    
+    lbds = np.logspace(-3, 0, 50)
+    zeta_sindy = []
+    zeta_pin = []
+
+    min_error_sindy = np.inf
+    opt_lbd_sindy = 0
+
+    min_error_pin = np.inf
+    opt_lbd_pin = 0
+
+    thet[thet==0] = 1
+    phi[phi==0] = 1
+
+
+    for lbd in lbds:
+        sindy = SINDY(dmethod, X[3:], theta_instance=None, custom_lib=theta_lib, norm_optimization=True, lbd=lbd)
+        coef_sindy = sindy.model()['coef']
+        coef_pin = sindy.model(fi)['coef']
+
+        sr, sthet, sphi = simulate_orbit(coef_sindy, coef_pin)["sindy"][:3]
+        pr, pthet, pphi = simulate_orbit(coef_sindy, coef_pin)["pin"][:3]
+
+        sr_error = np.average(np.abs((sr-r)/r))
+        pr_error = np.average(np.abs((pr - r)))
+
+        sthet_error = np.average(np.abs((sthet-thet)/thet))
+        pthet_error = np.average(np.abs((pthet - thet)/thet))
+
+        sphi_error = np.average(np.abs((sphi-phi)/phi))
+        pphi_error = np.average(np.abs((pphi - phi)/phi))
+
+        s_error = np.average([sr_error, sthet_error, sphi_error])
+        zeta_sindy.append(s_error)
+
+        p_error = np.average([pr_error, pthet_error, pphi_error])
+        zeta_pin.append(p_error)
+
+        if s_error <= min_error_sindy:
+                min_error_sindy = s_error
+                opt_lbd_sindy = lbd
+
+        if p_error <= min_error_pin:
+                min_error_pin = p_error
+                opt_lbd_pin = lbd
+
+    zeta_sindy = np.array(zeta_sindy)
+    zeta_pin = np.array(zeta_pin)
+
+    fix, axs = plt.subplots(2, 1)
+    axs[0].plot(lbds, zeta_sindy)
+    axs[0].plot(opt_lbd_sindy, min_error_sindy, marker='o', markersize=12)
+    axs[0].set_xscale('log')
+    axs[0].set_ylabel('average sindy model error.')
+    axs[0].set_title(f'optimal lambda value is: {opt_lbd_sindy} with minimal error {min_error_sindy}.')
+
+    axs[1].plot(lbds, zeta_pin)
+    axs[1].plot(opt_lbd_pin, min_error_pin, marker='o', markersize=12)
+    axs[1].set_xlabel('lambda values')
+    axs[1].set_xscale('log')
+    axs[1].set_ylabel('average pin-sindy model error.')
+    axs[1].set_title(f'optimal lambda value is: {opt_lbd_pin} with minimal error {min_error_pin}.')
+
+    plt.show()
 
 if print_sindy_coef:
     print(f"sindy coef: {coef_sindy}")

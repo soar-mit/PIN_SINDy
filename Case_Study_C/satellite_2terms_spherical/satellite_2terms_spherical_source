@@ -8,14 +8,15 @@ from matplotlib.gridspec import GridSpec
 # Goal: to find the density constant and synthetic atmospheric density constant in a
 #  hypothetical satellite orbit using SINDy and PIN-SINDy.
 #step 0: determine which output you would like to see.
-plot_true_vs_prior = True
-print_true_coef = True
-opt_lbd = False
-plot_error = False
-plot_model = False
-show_coef_error = False
-print_sindy_coef = False
-print_pin_coef = False
+plot_true_vs_prior = False
+print_true_coef = False
+opt_lbd_coef = False
+plot_error = True
+plot_model = True
+show_coef_error = True
+opt_lbd_sim = True
+print_sindy_coef = True
+print_pin_coef = True
 
 #step 1: define true and prior equation
 
@@ -24,7 +25,7 @@ def orbital_equation(t, X):
     M = 5.972e24 # mass of earth
     G = 6.6743e-11 # gravitational constant
     R = 6.371e6 # radius of eart
-    J2 = 1.08263e1 # perturbation coefficient
+    J2 = 1.08263e-2 # perturbation coefficient
     if X[0] < R:
         raise ValueError("Satellite went inside earth.")
 
@@ -57,10 +58,10 @@ print("step 1 complete.")
 M = 5.972e24
 G = 6.6743e-11
 R = 6.371e6
-J2 = 1.08263e1
+J2 = 1.08263e-2
 
-r0 =7078e6
-theta0 = np.deg2rad(60)
+r0 =7.078e6
+theta0 = np.deg2rad(30)
 
 X0 = [r0, theta0, 0, 0, 0, ((G*M/(r0)**3)**.5)/np.sin(theta0)]
 
@@ -124,8 +125,8 @@ fi[2, 8] = -2
 fi[2, 9] = -2
 
 dmethod = dmethods(X[0:3], t)
-sindy_pin = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, norm_optimization=False, derivative=4, lbd=1)
-sindy = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, norm_optimization=False, derivative=4, lbd=1)
+sindy_pin = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, norm_optimization=False, derivative=4, lbd=1e-3)
+sindy = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, norm_optimization=False, derivative=4, lbd=1e-3)
 
 coef_sindy = sindy.model()['coef']
 coef_pin = sindy_pin.model(fi)['coef']
@@ -262,7 +263,7 @@ if plot_true_vs_prior:
 if print_true_coef:
     print(f"true coefficients: {true_coef}")
 
-if opt_lbd:
+if opt_lbd_coef:
     lbds = np.logspace(-3, 0, 50)
     zeta_sindy = []
     zeta_pin = []
@@ -383,6 +384,9 @@ if plot_error:
 
     plt.tight_layout()
     plt.show()
+
+if opt_lbd_sim == True:
+    
 
 if print_sindy_coef:
     print(f"sindy coef: {coef_sindy}")

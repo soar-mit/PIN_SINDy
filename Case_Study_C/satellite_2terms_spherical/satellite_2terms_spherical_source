@@ -8,12 +8,14 @@ from matplotlib.gridspec import GridSpec
 # Goal: to find the density constant and synthetic atmospheric density constant in a
 #  hypothetical satellite orbit using SINDy and PIN-SINDy.
 #step 0: determine which output you would like to see.
-plot_true_vs_prior = False
-opt_lbd = True
+plot_true_vs_prior = True
+print_true_coef = True
+opt_lbd = False
 plot_error = False
 plot_model = False
 show_coef_error = False
-repeat = 1
+print_sindy_coef = False
+print_pin_coef = False
 
 #step 1: define true and prior equation
 
@@ -257,6 +259,9 @@ if plot_true_vs_prior:
     fig.legend()
     plt.show()
 
+if print_true_coef:
+    print(f"true coefficients: {true_coef}")
+
 if opt_lbd:
     lbds = np.logspace(-3, 0, 50)
     zeta_sindy = []
@@ -379,6 +384,7 @@ if plot_error:
     plt.tight_layout()
     plt.show()
 
-print(f"true coef: {true_coef}")
-print(f"sindy coef: {coef_sindy}")
-print(f"pin coef: {coef_pin}")
+if print_sindy_coef:
+    print(f"sindy coef: {coef_sindy}")
+if print_pin_coef:
+    print(f"pin coef: {coef_pin}")

@@ -2,7 +2,7 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from Case_Study_C.satellite_2terms_spherical.SINDyPySource import SINDY, theta, dmethods
+from Brunton_result_rep.SINDyPySource import SINDY, theta, dmethods
 
 # Goal: generate PIN-SINDy Model for Lotka-Volterra Equations
 

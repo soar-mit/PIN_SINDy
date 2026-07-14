@@ -320,5 +320,5 @@ class SINDY:
             forcing = np.array([np.dot(theta_vals, coef_vector) for coef_vector in coef])
             return forcing
 
-        sol = integrate.solve_ivp(f, self.t_span, self.u0, method=self.method, t_eval = self.t_data)
+        sol = integrate.solve_ivp(f, self.t_span, self.u0, method=self.method, t_eval = self.t_eval)
         return sol

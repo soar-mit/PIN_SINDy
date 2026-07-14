@@ -221,7 +221,8 @@ class STLSQ:
 
 class SINDY:
 
-    def __init__(self, dmethod, var_list, theta_instance=None, custom_lib=None, lbd=.01, norm_optimization=True, threshold=None, derivative="first derivative first order", regressor="lasso"):
+    def __init__(self, dmethod, var_list, t_eval, t_span, u0, method="LSODA", theta_instance=None, custom_lib=None, lbd=.01, norm_optimization=True, threshold=None,
+                 derivative="first derivative first order", regressor="lasso", max_iter=20):
         if derivative == "first derivative first order":
             self.diff = dmethod.forward_difference()
         if derivative =="second derivative":
@@ -230,20 +231,28 @@ class SINDY:
             self.diff = dmethod.order_2_forward_difference()
         if derivative == "second derivative second order":
             self.diff = dmethod.order_2_second_forward_difference()
-        if theta_instance:
+        if theta_instance is not None:
             self.theta_lib = theta_instance.library()
             self.order = theta_instance.get_order()
             self.theta = theta_instance
-        else:
+        elif custom_lib is not None:
             self.theta_lib = custom_lib
             self.order = None
             self.theta = None
+        else:
+            raise Warning("enter theta object or custom library.")
         self.var_list = np.array(var_list)
         self.lbd = lbd
         self.dmethod = dmethod
         self.threshold = threshold
         self.norm_optimization = norm_optimization
         self.regressor = regressor
+        self.max_iter = max_iter
+        self.iter = 0
+        self.t_span = t_span
+        self.t_eval = t_eval
+        self.u0 = u0
+        self.method=method
 
 
     def get_coef(self, round_coef=True):
@@ -272,7 +281,16 @@ class SINDY:
         self.coef = coef
         return {'coef': coef, 'model': model }
 
-    def simulate(self, t_span, u0, t_data, method="LSODA", fi=None):
+    def STLSQ(self, fi=None):
+        while self.iter < self.max_iter:
+            s = self.STLSQ(self.diff, self.theta_lib, self.lbd)
+            if self.regressor == "lasso":
+                coef = s.sparse_regression(self.norm_optimization, fi, threshold=self.threshold)
+            elif self.regressor == "ridge":
+                coef = s.sparse_regression(self.norm_optimization, fi, threshold=self.threshold)
+
+
+    def simulate(self, fi=None):
 
         if self.theta:
             pass
@@ -280,9 +298,6 @@ class SINDY:
             raise ValueError("Building a custom theta matrix into the model means that you will have to build a custom simulation model.")
 
         pwrs = self.theta.get_powers()
-        self.t_span = t_span
-        self.u0 = u0
-        self.t_data = t_data
 
         coef = self.coef
 
@@ -305,29 +320,5 @@ class SINDY:
             forcing = np.array([np.dot(theta_vals, coef_vector) for coef_vector in coef])
             return forcing
 
-        sol = integrate.solve_ivp(f, t_span, u0, method=method, t_eval = t_data)
+        sol = integrate.solve_ivp(f, self.t_span, self.u0, method=self.method, t_eval = self.t_data)
         return sol
-
-
-    def best_lbd(self, X, true_coef, fi=None):
-        lbd_guess = np.logspace(-6, 1, 50)
-        min_err = np.inf
-        lbd_opt = 0
-        for lbd in lbd_guess:
-            sindy_test = SINDY(self.dmethod, self.theta, self.var_list, lbd=lbd)
-            if fi is None:
-                model = sindy_test.model()
-            else:
-                model = sindy_test.model(fi=fi)
-            coef_sindy = sindy_test.get_coef()
-            coef_err = np.mean((true_coef - coef_sindy)**2)
-            if coef_err < min_err:
-                min_err = coef_err
-                lbd_opt = lbd
-        final_sindy = SINDY(self.dmethod, self.theta, self.var_list, lbd=lbd_opt)
-        if fi is None:
-            final_model = final_sindy.model()
-        else:
-            final_model = final_sindy.model(fi=fi)
-        final_sol = final_sindy.simulate(self.t_span, self.u0, self.t_data).y
-        return {'model':final_model, 'min_err': min_err, 'lbd': lbd_opt, 'sol': final_sol}

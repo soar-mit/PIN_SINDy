@@ -10,10 +10,10 @@ from matplotlib.gridspec import GridSpec
 #step 0: determine which output you would like to see.
 plot_true_vs_prior = False
 print_true_coef = True
-opt_lbd_coef = False
+opt_lbd_coef = True
 plot_error = True
 plot_model = True
-opt_lbd_sim = False
+opt_lbd_sim = True
 print_sindy_coef = True
 print_pin_coef = True
 
@@ -24,7 +24,7 @@ def orbital_equation(t, X):
     M = 1/(6.6743e-11) #5.972e24 # mass of earth
     G = 6.6743e-11 # gravitational constant
     R = 1 # radius of eart
-    J2 = 1.08263e-1 # perturbation coefficient
+    J2 = 1.08263e0 # perturbation coefficient
     if X[0] < R:
         raise ValueError("Satellite went inside earth.")
 
@@ -57,9 +57,9 @@ print("step 1 complete.")
 G = 6.6743e-11
 M = 1/G #5.972e24
 R = 1 #6.371e6
-J2 = 1.08263e-1
+J2 = 1.08263e0
 
-r0 = 1.5 #7.078e6
+r0 = 2.5 #7.078e6
 theta0 = np.deg2rad(60)
 
 X0 = [r0, theta0, 0, 0, 0, ((G*M/(r0)**3)**.5)/np.sin(theta0)]
@@ -124,9 +124,9 @@ fi[2, 8] = -2
 fi[2, 9] = -2
 
 dmethod = dmethods(X[0:3], t)
-sindy_pin = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, lbd=.104,
+sindy_pin = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1,
                   norm_optimization=False, derivative="second derivative second order", regressor="ridge")
-sindy = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, lbd=1e-8,
+sindy = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1,
               norm_optimization=False, derivative="second derivative second order", regressor="ridge")
 
 coef_sindy = sindy.model()['coef']
@@ -261,9 +261,6 @@ if plot_true_vs_prior:
     fig.legend()
     plt.show()
 
-if print_true_coef:
-    print(f"true coefficients: {true_coef}")
-
 if opt_lbd_coef:
     lbds = np.logspace(-8, 0, 50)
     zeta_sindy = []
@@ -276,7 +273,7 @@ if opt_lbd_coef:
     opt_lbd_pin = 0
 
     for lbd in lbds:
-        sindy_l = SINDY(dmethod, X[3:], theta_instance=None, custom_lib=theta_lib, norm_optimization=True, lbd=lbd, derivative="second derivative second order", regressor = "ridge")
+        sindy_l = SINDY(dmethod, X[3:], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, norm_optimization=True, lbd=lbd, derivative="second derivative second order", regressor = "ridge")
         coef_sindy_l = sindy_l.model()['coef']
         coef_pin_l = sindy_l.model(fi)['coef']
         sindy_norm = np.linalg.norm(coef_sindy_l, 2)
@@ -406,7 +403,7 @@ if opt_lbd_sim == True:
 
 
     for lbd in lbds:
-        sindy_l2 = SINDY(dmethod, X[3:], theta_instance=None, custom_lib=theta_lib, norm_optimization=True, lbd=lbd, derivative="second derivative second order", regressor="ridge")
+        sindy_l2 = SINDY(dmethod, X[3:], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, norm_optimization=True, lbd=lbd, derivative="second derivative second order", regressor="ridge")
         coef_sindy_l2 = sindy_l2.model()['coef']
         coef_pin_l2 = sindy_l2.model(fi)['coef']
 
@@ -485,6 +482,8 @@ if opt_lbd_sim == True:
     plt.show()
 
 if print_sindy_coef:
-    print(f"sindy coef: {coef_sindy}")
+    print(f"sindy coef: {np.round(coef_sindy, 2)}")
 if print_pin_coef:
-    print(f"pin coef: {coef_pin}")
+    print(f"pin coef: {np.round(coef_pin, 2)}")
+if print_true_coef:
+    print(f"true coefficients: {np.round(true_coef, 2)}")

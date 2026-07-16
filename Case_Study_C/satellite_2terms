@@ -1,4 +1,4 @@
-from Case_Study_C.satellite_2terms_spherical.SINDyPySource import SINDY, theta, dmethods
+from SINDyPySource import SINDY, theta, dmethods
 from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 ## step 0: define output
 plot_true_vs_prior = True
 plot_model = True
-plot_opt_lbd = True
+plot_opt_lbd = False
 plot_error = True
 plot_coef_percent = False
 
@@ -171,8 +171,10 @@ fi[1, 1] = -G*M
 fi[2, 2] = -G*M
 
 dmethod = dmethods(X[0:3], t)
-sindy_pin = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, lbd=.000128, norm_optimization=True, derivative=4)
-sindy = SINDY(dmethod, X[0:3], theta_instance=None, custom_lib=theta_lib, lbd= 1e-1, norm_optimization=True, derivative=4)
+sindy_pin = SINDY(dmethod, X[0:3], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1, norm_optimization=False,
+                  regressor="lstsq", derivative="second derivative second order")
+sindy = SINDY(dmethod, X[0:3], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd= 1, norm_optimization=False,
+              regressor="lstsq", derivative="second derivative second order")
 
 coef_sindy = sindy.model()['coef']
 coef_pin = sindy_pin.model(fi)['coef']
@@ -315,7 +317,7 @@ if plot_model:
 # build custom SINDy and PIN-SINDy model and find optimal lambda.
 
 if plot_opt_lbd:
-    lbds = np.logspace(-10, 1, 75)
+    lbds = np.logspace(-5, 1, 75)
     zeta_sindy = []
     zeta_pin = []
 
@@ -326,7 +328,9 @@ if plot_opt_lbd:
     opt_lbd_pin = 0
 
     for lbd in lbds:
-        sindy_l= SINDY(dmethod, X[3:], theta_instance=None, custom_lib=theta_lib, norm_optimization=True, lbd=lbd, derivative=4)
+        sindy_l= SINDY(dmethod, X[3:], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib,
+                       norm_optimization=True, lbd=lbd, regressor = "lstsq",
+                       derivative="second derivative second order")
         coef_sindy_l = sindy_l.model()['coef']
         coef_pin_l = sindy_l.model(fi)['coef']
         sindy_norm = np.linalg.norm(coef_sindy_l, 2)

@@ -10,10 +10,10 @@ from matplotlib.gridspec import GridSpec
 #step 0: determine which output you would like to see.
 plot_true_vs_prior = False
 print_true_coef = True
-opt_lbd_coef = True
+opt_lbd_coef = False
 plot_error = True
 plot_model = True
-opt_lbd_sim = True
+opt_lbd_sim = False
 print_sindy_coef = True
 print_pin_coef = True
 
@@ -125,9 +125,9 @@ fi[2, 9] = -2
 
 dmethod = dmethods(X[0:3], t)
 sindy_pin = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1,
-                  norm_optimization=False, derivative="second derivative second order", regressor="ridge")
+                  norm_optimization=False, derivative="second derivative second order", regressor="lstsq")
 sindy = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1,
-              norm_optimization=False, derivative="second derivative second order", regressor="ridge")
+              norm_optimization=False, derivative="second derivative second order", regressor="lstsq")
 
 coef_sindy = sindy.model()['coef']
 coef_pin = sindy_pin.model(fi)['coef']
@@ -262,7 +262,7 @@ if plot_true_vs_prior:
     plt.show()
 
 if opt_lbd_coef:
-    lbds = np.logspace(-8, 0, 50)
+    lbds = np.logspace(-3, 0, 50)
     zeta_sindy = []
     zeta_pin = []
 
@@ -273,7 +273,8 @@ if opt_lbd_coef:
     opt_lbd_pin = 0
 
     for lbd in lbds:
-        sindy_l = SINDY(dmethod, X[3:], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, norm_optimization=True, lbd=lbd, derivative="second derivative second order", regressor = "ridge")
+        sindy_l = SINDY(dmethod, X[3:], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib,
+                        norm_optimization=False, lbd=lbd, derivative="second derivative second order", regressor = "lstsq")
         coef_sindy_l = sindy_l.model()['coef']
         coef_pin_l = sindy_l.model(fi)['coef']
         sindy_norm = np.linalg.norm(coef_sindy_l, 2)
@@ -386,7 +387,7 @@ if plot_error:
     plt.show()
 
 if opt_lbd_sim == True:
-    lbds = np.logspace(-10, -3, 50)
+    lbds = np.logspace(-3, 1, 50)
     lbds = list(lbds)
     lbds_copy = lbds.copy()
     zeta_sindy = []
@@ -403,7 +404,8 @@ if opt_lbd_sim == True:
 
 
     for lbd in lbds:
-        sindy_l2 = SINDY(dmethod, X[3:], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, norm_optimization=True, lbd=lbd, derivative="second derivative second order", regressor="ridge")
+        sindy_l2 = SINDY(dmethod, X[3:], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib,
+                         norm_optimization=False, lbd=lbd, derivative="second derivative second order", regressor="lstsq")
         coef_sindy_l2 = sindy_l2.model()['coef']
         coef_pin_l2 = sindy_l2.model(fi)['coef']
 

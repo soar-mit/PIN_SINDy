@@ -2,7 +2,7 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import integrate
-from Brunton_result_rep.SINDyPySource import theta, dmethods, SINDY
+from Case_Study_C.SINDyPySource import theta, dmethods, SINDY
 
 # #create toy problem:
 

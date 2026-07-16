@@ -2,7 +2,7 @@ from matplotlib.pylab import norm
 from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
-from Brunton_result_rep.SINDyPySource import SINDY, theta, dmethod
+from Case_Study_C.SINDyPySource import SINDY, theta, dmethod
 
 # Goal: generate Pure SINDy Model for Lotka-Volterra Equations
 

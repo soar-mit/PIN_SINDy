@@ -223,16 +223,16 @@ class STLSQ:
             norm[norm==0] = 1
             theta_lib_scaled = self.theta_lib/norm[:,None]
             if fi is None:
-                coef_scaled = np.linalg.lstsq(theta_lib_scaled, self.diff.T)[0].T
+                coef_scaled = np.linalg.lstsq(theta_lib_scaled.T, self.diff.T)[0].T
                 coef = coef_scaled/norm
             else:
-                coef_scaled = np.linalg.lstsq(theta_lib_scaled, (self.diff - fi@theta_lib_scaled).T)[0].T
+                coef_scaled = np.linalg.lstsq(theta_lib_scaled.T, (self.diff - fi@theta_lib_scaled).T)[0].T
                 coef = fi + coef_scaled/norm
         else:
             if fi is None:
                 coef = np.linalg.lstsq(self.theta_lib.T, self.diff.T)[0].T
             else:
-                coef = np.linalg.lstsq(self.theta_lib.T, self.diff.T)[0].T
+                coef = np.linalg.lstsq(self.theta_lib.T, (self.diff - fi@self.theta_lib).T)[0].T
                 coef = fi + coef
 
         state_var, candidate_functions = coef.shape
@@ -241,7 +241,10 @@ class STLSQ:
             coef[smallinds] = 0
             for i in range(state_var):
                 biginds = ~smallinds[i,:]
-                coef[i, biginds] = np.linalg.lstsq(self.theta_lib[biginds, :].T, self.diff[i,:].T)[0].T
+                if fi is None:
+                    coef[i, biginds] = np.linalg.lstsq(self.theta_lib[biginds, :].T, self.diff[i,:])[0].T
+                else:
+                    coef[i, biginds] = np.linalg.lstsq(self.theta_lib[biginds, :].T, (self.diff - fi@self.theta_lib)[i,:])[0].T
             self.iter += 1
         return coef
 

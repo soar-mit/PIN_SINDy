@@ -146,7 +146,7 @@ class dmethods:
 
 class STLSQ:
 
-    def __init__(self, diff, theta_lib, lbd=.01):
+    def __init__(self, diff, theta_lib, threshold, lbd=.01, max_iter=10):
         """initializes parameters:
         diff is differential of all state variables.
         lbd: float representing bias penalty.
@@ -157,9 +157,12 @@ class STLSQ:
         self.diff = diff
         self.lbd = lbd
         self.theta_lib = theta_lib
+        self.max_iter = max_iter
+        self.iter = 0
+        self.threshold = threshold
 
 
-    def sparse_regression(self, norm_optimization, fi, threshold=None):
+    def lasso_regression(self, norm_optimization, fi):
         """returns the final coefficients for the system using pure SINDy (fi=None) or PIN-SINDy."""
         diff = self.diff
         theta_lib = self.theta_lib
@@ -190,11 +193,9 @@ class STLSQ:
                     coef.append(model.fit(theta_lib.T, diff[i] - fi[i] @ theta_lib).coef_)
                 coef= np.array(coef)
                 coef = fi + coef
-        if threshold:
-            coef[coef <= np.abs(threshold)] = 0
         return coef
 
-    def ridge_regression(self, fi, norm_optimization, threshold=None):
+    def ridge_regression(self, fi, norm_optimization):
         diff = self.diff
         theta_lib = self.theta_lib
 
@@ -214,15 +215,42 @@ class STLSQ:
             else:
                 coef = ridge_regression(theta_lib.T, (diff-fi@theta_lib).T, alpha=self.lbd)
                 coef = coef + fi
-
-        if threshold:
-            coef[coef<= np.abs(threshold)] = 0
         return coef
+
+    def lstsq(self, fi, norm_optimization):
+        if norm_optimization:
+            norm = np.linalg.norm(self.theta_lib, ord=2, axis=1)
+            norm[norm==0] = 1
+            theta_lib_scaled = self.theta_lib/norm[:,None]
+            if fi is None:
+                coef_scaled = np.linalg.lstsq(theta_lib_scaled, self.diff.T)[0].T
+                coef = coef_scaled/norm
+            else:
+                coef_scaled = np.linalg.lstsq(theta_lib_scaled, (self.diff - fi@theta_lib_scaled).T)[0].T
+                coef = fi + coef_scaled/norm
+        else:
+            if fi is None:
+                coef = np.linalg.lstsq(self.theta_lib.T, self.diff.T)[0].T
+            else:
+                coef = np.linalg.lstsq(self.theta_lib.T, self.diff.T)[0].T
+                coef = fi + coef
+
+        state_var, candidate_functions = coef.shape
+        while self.max_iter > self.iter:
+            smallinds = np.abs(coef) < self.threshold
+            coef[smallinds] = 0
+            for i in range(state_var):
+                biginds = ~smallinds[i,:]
+                coef[i, biginds] = np.linalg.lstsq(self.theta_lib[biginds, :].T, self.diff[i,:].T)[0].T
+            self.iter += 1
+        return coef
+
+
 
 class SINDY:
 
     def __init__(self, dmethod, var_list, t_eval, t_span, u0, method="LSODA", theta_instance=None, custom_lib=None, lbd=.01, norm_optimization=True, threshold=None,
-                 derivative="first derivative first order", regressor="lasso", max_iter=20):
+                 derivative="first derivative first order", regressor="lasso", max_iter = 20):
         if derivative == "first derivative first order":
             self.diff = dmethod.forward_difference()
         if derivative =="second derivative":
@@ -247,12 +275,11 @@ class SINDY:
         self.threshold = threshold
         self.norm_optimization = norm_optimization
         self.regressor = regressor
-        self.max_iter = max_iter
-        self.iter = 0
         self.t_span = t_span
         self.t_eval = t_eval
         self.u0 = u0
         self.method=method
+        self.max_iter = max_iter
 
 
     def get_coef(self, round_coef=True):
@@ -266,11 +293,17 @@ class SINDY:
         """creates differential equation system using sparse regression for state variables."""
         diff = self.diff
         theta_lib = self.theta_lib
-        s = STLSQ(diff, theta_lib, self.lbd)
+        s = STLSQ(diff, theta_lib, self.lbd, max_iter = self.max_iter)
         if self.regressor == "lasso":
-            coef = s.sparse_regression(self.norm_optimization, fi, threshold=self.threshold)
+            coef = s.lasso_regression(self.norm_optimization, fi)
         elif self.regressor == "ridge":
-            coef = s.ridge_regression(fi, norm_optimization=self.norm_optimization, threshold=self.threshold)
+            coef = s.ridge_regression(fi, norm_optimization=self.norm_optimization)
+        elif self.regressor == "lstsq":
+            coef = s.lstsq(fi, norm_optimization = self.norm_optimization)
+        else:
+            raise Warning("did not select a regressor. keyword are 'lasso' or 'ridge'")
+
+
         model = []
         for i in range(len(coef)):
             model_term = np.dot(theta_lib.T, coef[i])
@@ -280,14 +313,6 @@ class SINDY:
         coef = np.array(coef)
         self.coef = coef
         return {'coef': coef, 'model': model }
-
-    def STLSQ(self, fi=None):
-        while self.iter < self.max_iter:
-            s = self.STLSQ(self.diff, self.theta_lib, self.lbd)
-            if self.regressor == "lasso":
-                coef = s.sparse_regression(self.norm_optimization, fi, threshold=self.threshold)
-            elif self.regressor == "ridge":
-                coef = s.sparse_regression(self.norm_optimization, fi, threshold=self.threshold)
 
 
     def simulate(self, fi=None):

@@ -10,10 +10,10 @@ from matplotlib.gridspec import GridSpec
 #step 0: determine which output you would like to see.
 plot_true_vs_prior = False
 print_true_coef = True
-opt_lbd_coef = False
+opt_lbd_coef = True
 plot_error = True
 plot_model = True
-opt_lbd_sim = False
+opt_lbd_sim = True
 print_sindy_coef = True
 print_pin_coef = True
 
@@ -124,10 +124,10 @@ fi[2, 8] = -2
 fi[2, 9] = -2
 
 dmethod = dmethods(X[0:3], t)
-sindy_pin = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1,
-                  norm_optimization=False, derivative="second derivative second order", regressor="lstsq")
-sindy = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1,
-              norm_optimization=False, derivative="second derivative second order", regressor="lstsq")
+sindy_pin = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1.26,
+                  norm_optimization=False, derivative="second derivative second order", regressor="lstsq", max_iter=5)
+sindy = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1.53,
+              norm_optimization=False, derivative="second derivative second order", regressor="lstsq", max_iter=5)
 
 coef_sindy = sindy.model()['coef']
 coef_pin = sindy_pin.model(fi)['coef']

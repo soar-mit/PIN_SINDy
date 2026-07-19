@@ -1,7 +1,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from Case_Study_C.SINDyPySource import SINDY, dmethods, theta
+from SINDyPySource import SINDY, dmethods, theta
 from scipy import integrate
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d  import Line3DCollection
@@ -23,9 +23,9 @@ x0 = (-8, 7, 27)
 x = integrate.solve_ivp(lorentz, t_span, x0, t_eval=t).y
 
 dmethod = dmethods(x, t)
-library = theta(x, 5)
-sindy = SINDY(dmethod, x, norm_optimization=False, t_eval=t_long, t_span=t_span_long, u0=x0, method="RK45", theta_instance = library, lbd=.01,
-              regressor="lstsq", threshold=1e-4)
+library = theta(x, 2)
+sindy = SINDY(dmethod, x, norm_optimization=False, t_eval=t, t_span=t_span, u0=x0, method="RK45", theta_instance = library, lbd=10,
+              regressor="lasso", threshold=1e-3)
 
 model = sindy.model()
 print(np.round(sindy.get_coef(), 2))
@@ -40,7 +40,7 @@ axs0.plot(sol[0], sol[1], sol[2])
 axs0.set_xlabel('x')
 axs0.set_ylabel('y')
 axs0.set_zlabel('z')
-axs0.set_title("sindy solution. time span 0-20")
+axs0.set_title("sindy solution. time span 0-100")
 
 axs1.plot(x[0], x[1], x[2])
 axs1.set_xlabel('x')
@@ -49,3 +49,4 @@ axs1.set_zlabel('z')
 axs1.set_title("model. time span 0-100")
 
 plt.show()
+print(np.round(sindy.get_coef(), 2))

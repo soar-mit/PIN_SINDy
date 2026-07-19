@@ -1,4 +1,4 @@
-from SINDyPySource import SINDY, dmethods
+from Brunton_result_rep.SINDyPySource import SINDY, dmethods
 from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,7 +8,7 @@ from matplotlib.gridspec import GridSpec
 # Goal: to find the density constant and synthetic atmospheric density constant in a
 #  hypothetical satellite orbit using SINDy and PIN-SINDy.
 #step 0: determine which output you would like to see.
-plot_true_vs_prior = False
+plot_true_vs_prior = True
 print_true_coef = True
 opt_lbd_coef = True
 plot_error = True
@@ -24,7 +24,7 @@ def orbital_equation(t, X):
     M = 1/(6.6743e-11) #5.972e24 # mass of earth
     G = 6.6743e-11 # gravitational constant
     R = 1 # radius of eart
-    J2 = 1.08263e0 # perturbation coefficient
+    J2 = 1.08263e-3 # perturbation coefficient
     if X[0] < R:
         raise ValueError("Satellite went inside earth.")
 
@@ -57,7 +57,7 @@ print("step 1 complete.")
 G = 6.6743e-11
 M = 1/G #5.972e24
 R = 1 #6.371e6
-J2 = 1.08263e0
+J2 = 1.08263e-3
 
 r0 = 2.5 #7.078e6
 theta0 = np.deg2rad(60)

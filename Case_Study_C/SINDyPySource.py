@@ -103,11 +103,11 @@ class dmethods:
         dt = self.dt
 
         var_1 = np.zeros((len(var)))
-        var_1[0] = (-25*var[0] + 48*var[1] - 36*var[2] + 26*var[3] - 3*var[4])/(12*dt)
-        var_1[1] = (-25*var[1] + 48*var[2] - 36*var[3] + 26*var[4] - 3*var[5])/(12*dt)
+        var_1[0] = (-25*var[0] + 48*var[1] - 36*var[2] + 16*var[3] - 3*var[4])/(12*dt)
+        var_1[1] = (-25*var[1] + 48*var[2] - 36*var[3] + 16*var[4] - 3*var[5])/(12*dt)
 
         for i in range(2, len(var)-2):
-            var_1[i] = (-var[i+2] + 8*var[i] - 8*var[i-1] + var[i-2])/(12*dt)
+            var_1[i] = (-var[i+2] + 8*var[i+1] - 8*var[i-1] + var[i-2])/(12*dt)
 
         var_1[-2] = (25*var[-2] - 48*var[-3] + 36*var[-4] - 16*var[-5] + 3*var[-6])/(12*dt)
         var_1[-1] = (25*var[-1] - 48*var[-2] + 36*var[-3] - 16*var[-4] + 3*var[-5])/(12*dt)
@@ -126,14 +126,14 @@ class dmethods:
 
         var_2f = np.zeros((len(var)))
 
-        var_2f[0] = (2*var[0] - 5*var[1] + 4*var[2] - var[3])/(dt**3)
-        var_2f[1] = (2*var[1] - 5*var[2] + 4*var[3] - var[4])/(dt**3)
+        var_2f[0] = (2*var[0] - 5*var[1] + 4*var[2] - var[3])/(dt**2)
+        var_2f[1] = (2*var[1] - 5*var[2] + 4*var[3] - var[4])/(dt**2)
 
         for i in range(2, len(var)-2):
             var_2f[i] = (-var[i+2] + 16*var[i+1] - 30*var[i] + 16*var[i-1] - var[i-2])/(12*dt**2)
 
-        var_2f[-2] = (2*var[-2] - 5*var[-3] + 4*var[-4] - var[-5])/(dt**3)
-        var_2f[-1] = (2*var[-1] - 5*var[-2] + 4*var[-3] - var[-4])/(dt**3)
+        var_2f[-2] = (2*var[-2] - 5*var[-3] + 4*var[-4] - var[-5])/(dt**2)
+        var_2f[-1] = (2*var[-1] - 5*var[-2] + 4*var[-3] - var[-4])/(dt**2)
         return var_2f
 
     def order_2_second_forward_difference(self):
@@ -146,7 +146,7 @@ class dmethods:
 
 class STLSQ:
 
-    def __init__(self, diff, theta_lib, threshold, lbd=.01, max_iter=10):
+    def __init__(self, diff, theta_lib, lbd, max_iter=20):
         """initializes parameters:
         diff is differential of all state variables.
         lbd: float representing bias penalty.
@@ -159,7 +159,6 @@ class STLSQ:
         self.theta_lib = theta_lib
         self.max_iter = max_iter
         self.iter = 0
-        self.threshold = threshold
 
 
     def lasso_regression(self, norm_optimization, fi):
@@ -224,10 +223,9 @@ class STLSQ:
             theta_lib_scaled = self.theta_lib/norm[:,None]
             if fi is None:
                 coef_scaled = np.linalg.lstsq(theta_lib_scaled.T, self.diff.T)[0].T
-                coef = coef_scaled/norm
             else:
                 coef_scaled = np.linalg.lstsq(theta_lib_scaled.T, (self.diff - fi@theta_lib_scaled).T)[0].T
-                coef = fi + coef_scaled/norm
+            coef = coef_scaled/norm
         else:
             if fi is None:
                 coef = np.linalg.lstsq(self.theta_lib.T, self.diff.T)[0].T
@@ -236,7 +234,7 @@ class STLSQ:
 
         state_var, candidate_functions = coef.shape
         while self.max_iter > self.iter:
-            smallinds = np.abs(coef) < self.threshold
+            smallinds = np.abs(coef) < self.lbd
             coef[smallinds] = 0
             for i in range(state_var):
                 biginds = ~smallinds[i,:]
@@ -244,16 +242,15 @@ class STLSQ:
                     coef[i, biginds] = np.linalg.lstsq(self.theta_lib[biginds,:].T, self.diff[i,:])[0].T
                 else:
                     coef[i, biginds] = np.linalg.lstsq(self.theta_lib[biginds,:].T, (self.diff[i,:] - (fi@self.theta_lib)[i,:]))[0].T
-                self.iter += 1
+            self.iter += 1
         if fi is not None:
             coef = fi + coef
         return coef
 
 
-
 class SINDY:
 
-    def __init__(self, dmethod, var_list, t_eval, t_span, u0, method="LSODA", theta_instance=None, custom_lib=None, lbd=.01, norm_optimization=True, threshold=None,
+    def __init__(self, dmethod, var_list, t_eval, t_span, u0, method="RK45", theta_instance=None, custom_lib=None, lbd=.01, norm_optimization=True,
                  derivative="first derivative first order", regressor="lasso", max_iter = 20):
         if derivative == "first derivative first order":
             self.diff = dmethod.forward_difference()
@@ -276,7 +273,6 @@ class SINDY:
         self.var_list = np.array(var_list)
         self.lbd = lbd
         self.dmethod = dmethod
-        self.threshold = threshold
         self.norm_optimization = norm_optimization
         self.regressor = regressor
         self.t_span = t_span

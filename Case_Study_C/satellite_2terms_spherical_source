@@ -1,4 +1,4 @@
-from Brunton_result_rep.SINDyPySource import SINDY, dmethods
+from SINDyPySource import SINDY, dmethods
 from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,12 +8,12 @@ from matplotlib.gridspec import GridSpec
 # Goal: to find the density constant and synthetic atmospheric density constant in a
 #  hypothetical satellite orbit using SINDy and PIN-SINDy.
 #step 0: determine which output you would like to see.
-plot_true_vs_prior = True
+plot_true_vs_prior = False
 print_true_coef = True
-opt_lbd_coef = True
+opt_lbd_coef = False
 plot_error = True
 plot_model = True
-opt_lbd_sim = True
+opt_lbd_sim = False
 print_sindy_coef = True
 print_pin_coef = True
 
@@ -21,10 +21,10 @@ print_pin_coef = True
 
 def orbital_equation(t, X):
     # X = [r theta, phi, dr, dtheta, dphi]
-    M = 1/(6.6743e-11) #5.972e24 # mass of earth
-    G = 6.6743e-11 # gravitational constant
-    R = 1 # radius of eart
-    J2 = 1.08263e-3 # perturbation coefficient
+    M =  5.972e24 # mass of earth
+    G = 1/M #6.6743e-11 # gravitational constant
+    R = 1 #6.371e6 # radius of earth
+    J2 = 1.08263e0 # perturbation coefficient
     if X[0] < R:
         raise ValueError("Satellite went inside earth.")
 
@@ -54,22 +54,22 @@ def orbital_equation(t, X):
 print("step 1 complete.")
 # step 2: find initial conditions:
 
-G = 6.6743e-11
-M = 1/G #5.972e24
+M = 5.972e24
+G = 1/M #6.6743e-11
 R = 1 #6.371e6
-J2 = 1.08263e-3
+J2 = 1.08263e0
 
-r0 = 2.5 #7.078e6
+r0 = 3 #7.078e6
 theta0 = np.deg2rad(60)
 
 X0 = [r0, theta0, 0, 0, 0, ((G*M/(r0)**3)**.5)/np.sin(theta0)]
 
 #calculate period:
 T = 2*np.pi*(X0[0]**3 / (G*M))**(1/2)
-t_span = (0, 5*(int(T)))
-t = np.linspace(t_span[0], t_span[1], 15*(int(T)))
+t_span = (0, 10*(int(T)))
+t = np.linspace(t_span[0], t_span[1], 30*(int(T)))
 
-r, thet, phi, dr , dthet, dphi = integrate.solve_ivp(orbital_equation, t_span, X0, method='LSODA', t_eval=t).y
+r, thet, phi, dr , dthet, dphi = integrate.solve_ivp(orbital_equation, t_span, X0, t_eval=t,  method="LSODA").y
 X = np.array([r, thet, phi, dr, dthet, dphi])
 
 x = r*np.cos(phi)*np.sin(thet)
@@ -80,7 +80,7 @@ print("step 2 complete.")
 
 
 #Step 3: Create theta matrix
-theta_lib = np.zeros((10, 15*(int(T))))
+theta_lib = np.zeros((10, 30*(int(T))))
 theta_lib[0,:] = r*dthet**2
 theta_lib[1,:] = r*np.sin(thet)**2*dphi**2
 theta_lib[2,:] = r**(-2)
@@ -124,13 +124,13 @@ fi[2, 8] = -2
 fi[2, 9] = -2
 
 dmethod = dmethods(X[0:3], t)
-sindy_pin = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1.26,
-                  norm_optimization=False, derivative="second derivative second order", regressor="lstsq", max_iter=5)
-sindy = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1.53,
-              norm_optimization=False, derivative="second derivative second order", regressor="lstsq", max_iter=5)
+sindy = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.3,
+              norm_optimization=False, derivative="second derivative second order", regressor="lstsq")
+sindy_pin = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.3,
+                  norm_optimization=False, derivative="second derivative second order", regressor="lstsq")
 
-coef_sindy = sindy.model()['coef']
-coef_pin = sindy_pin.model(fi)['coef']
+coef_sindy = np.round(sindy.model()['coef'], 2)
+coef_pin = np.round(sindy_pin.model(fi)['coef'], 2)
 
 print("step 4 complete.")
 
@@ -164,7 +164,7 @@ def simulate_orbit(coef_s, coef_p):
 
         return [X[3], X[4], X[5], forcing[0], forcing[1], forcing[2]]
 
-    sol_sindy = integrate.solve_ivp(sindy_model, t_span, X0, method="LSODA", t_eval=t).y
+    sol_sindy = integrate.solve_ivp(sindy_model, t_span, X0, t_eval=t).y
 
     def pin_model(t, X):
 
@@ -193,7 +193,7 @@ def simulate_orbit(coef_s, coef_p):
         return [X[3], X[4], X[5], forcing[0], forcing[1], forcing[2]]
 
 
-    sol_pin = integrate.solve_ivp(pin_model, t_span, X0, method="LSODA", t_eval=t).y
+    sol_pin = integrate.solve_ivp(pin_model, t_span, X0, t_eval=t).y
 
     return {"sindy":sol_sindy, "pin":sol_pin}
 
@@ -201,8 +201,8 @@ print("step 5 complete.")
 
 if plot_true_vs_prior:
     def prior_equation(t, X):
-        G = 6.6743e-11
-        M = 1/G #5.972e24
+        M = 5.972e24
+        G = 1/M #6.6743e-11
         R = 1 #6.371e6 # radius of earth
 
         if X[0] < R:
@@ -359,7 +359,7 @@ if plot_error:
 
     rp_error = abs((sol_pin[0] - X[0]) / X[0])
     thetap_error = abs((sol_pin[1] - X[1]) / X[1])
-    phip_error = abs((sol_sindy[2] - X[2]) / X[2])
+    phip_error = abs((sol_pin[2] - X[2]) / X[2])
 
     fig, axs = plt.subplots(3, 2)
 
@@ -489,3 +489,4 @@ if print_pin_coef:
     print(f"pin coef: {np.round(coef_pin, 2)}")
 if print_true_coef:
     print(f"true coefficients: {np.round(true_coef, 2)}")
+print(f"max absolute difference: {np.max(np.abs(coef_sindy - coef_pin))}")

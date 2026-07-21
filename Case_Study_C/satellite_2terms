@@ -4,18 +4,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import itertools
-from tabulate import tabulate
-from PIL import Image, ImageDraw, ImageFont
+np.set_printoptions(precision=2, suppress=True)
 
 
 # Goal: to find the density constant and synthetic atmospheric density constant in a
 #  hypothetical satellite orbit using SINDy and PIN-SINDy.
 # experiment: have SINDy try to make the other term, and have it already given the other term and have to find the coefficient.
 ## step 0: define output
-plot_true_vs_prior = True
-plot_model = True
+plot_true_vs_prior = False
+plot_model = False
 plot_opt_lbd = False
-plot_error = True
+plot_error = False
 plot_coef_percent = False
 
 #step 1: define true and prior equation
@@ -25,7 +24,7 @@ def orbital_equation(t, X):
     M = 5.972e24 # mass of earth
     G = 1/M #6.6743e-11 # gravitational constant
     R = 1 #6.371e6 # radius of earth
-    J2 = 1.08263e-1 # perturbation coefficient
+    J2 = 1.08263e-3 # perturbation coefficient
     omega_E = np.array([0, 0, 7.2921e-5])
     V = np.array([X[3], X[4], X[5]])
     r = np.array([X[0], X[1], X[2]])
@@ -55,7 +54,7 @@ def orbital_equation(t, X):
 M = 5.972e24
 G = 1/M #6.6743e-11
 R = 1 #6.371e6
-J2 = 1.08263e-1
+J2 = 1.08263e-3
 r0 = np.array([1.5, 0, 1.5]) #[7000e3, 0, 1000e3]
 rmag = np.linalg.norm(r0, axis=0)
 
@@ -72,17 +71,17 @@ X0 = [r0[0], r0[1], r0[2], v0[0], v0[1], v0[2]]
 
 #calculate period and time:
 T = 2*np.pi*(rmag**3 / (G*M))**(1/2)
-t_span = (0, T)
-t = np.linspace(t_span[0], t_span[1], 4*int(T))
+t_span = (0, 10*T)
+t = np.linspace(t_span[0], t_span[1], 30*int(T))
 
-x, y, z, dx, dy, dz = integrate.solve_ivp(orbital_equation, t_span, X0, method='LSODA', t_eval=t).y
+x, y, z, dx, dy, dz = integrate.solve_ivp(orbital_equation, t_span, X0, method='RK45', t_eval=t).y
 X = np.array([x, y, z, dx, dy, dz])
 
 if plot_true_vs_prior:
     def prior_equation(t, X):
         M = 5.972e24
-        G = 1/M #6.6743e-11
-        R = 1 #6.371e6 # radius of earth
+        G = 6.6743e-11
+        R = 6.371e6 # radius of earth
 
         rmag = np.linalg.norm(X[:3], axis=0)
 
@@ -137,43 +136,44 @@ theta_r3 = theta_r3.library()[:3]
 theta_r5 = np.concatenate((theta_r5.library()[0:3], theta_r5.library()[9:]))
 theta_r7 = theta_r7.library()[9:]
 
-# binomial_terms = np.zeros((3, 4*int(T)))
-# binomial_terms[0,:] = x*(5*z**2/rmag**2 - 1)
-# binomial_terms[1,:] = y*(5*z**2/rmag**2 - 1)
-# binomial_terms[2,:] = z*(5*z**2/rmag**2 - 3)
+binomial_terms = np.zeros((3, 30*int(T)))
+binomial_terms[0,:] = x*(5*z**2/rmag**2 - 1)/rmag**5
+binomial_terms[1,:] = y*(5*z**2/rmag**2 - 1)/rmag**5
+binomial_terms[2,:] = z*(5*z**2/rmag**2 - 3)/rmag**5
 
-theta_lib = np.concatenate((theta_r3, theta_r5, theta_r7))
-print(theta_lib.shape)
+theta_lib = np.concatenate((theta_r3, binomial_terms))
 #Step 4: create PIN-SINDy and SINDy Models
 
 #true coefficients. Doesn't include xdot, ydot, zdot terms.
-true_coef = np.zeros((3,26))
+true_coef = np.zeros((3,6))
 
 true_coef[0, 0] = -G*M
-#true_coef[0, 26] = 3*G*M*R**2*J2/2
-true_coef[0, 3] = -3*G*M*R**2*J2/2
-true_coef[0, 21] = 15*G*M*R**2*J2/2
+true_coef[0, 3] = 3*G*M*R**2*J2/2
+# true_coef[0, 3] = -3*G*M*R**2*J2/2
+# true_coef[0, 21] = 15*G*M*R**2*J2/2
 
 true_coef[1, 1] = -G*M
-#true_coef[1, 27] = 3*G*M*R**2*J2/2
-true_coef[1, 4] = -3*G*M*R**2*J2/2
-true_coef[1, 24] = 15*G*M*R**2*J2/2
+true_coef[1, 4] = 3*G*M*R**2*J2/2
+# true_coef[1, 4] = -3*G*M*R**2*J2/2
+# true_coef[1, 24] = 15*G*M*R**2*J2/2
 
 true_coef[2, 2] = -G*M
-#true_coef[2, 28] = 3*G*M*R**2*J2/2
-true_coef[2, 5] = -9*G*M*R**2*J2/2
-true_coef[2, 25] = 15*G*M*R**2*J2/2
+true_coef[2, 5] = 3*G*M*R**2*J2/2
+# true_coef[2, 5] = -9*G*M*R**2*J2/2
+# true_coef[2, 25] = 15*G*M*R**2*J2/2
 
 #prior coefficient matrix fi. Doesn't include
-fi = np.zeros((3,26))
+fi = np.zeros((3,6))
 fi[0, 0] = -G*M
 fi[1, 1] = -G*M
 fi[2, 2] = -G*M
 
 dmethod = dmethods(X[0:3], t)
-sindy_pin = SINDY(dmethod, X[0:3], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1, norm_optimization=False,
+sindy_pin = SINDY(dmethod, X[0:3], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib,
+                  lbd=.013, norm_optimization=True,
                   regressor="lstsq", derivative="second derivative second order")
-sindy = SINDY(dmethod, X[0:3], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd= 1, norm_optimization=False,
+sindy = SINDY(dmethod, X[0:3], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.1,
+              norm_optimization=True,
               regressor="lstsq", derivative="second derivative second order")
 
 coef_sindy = sindy.model()['coef']
@@ -198,9 +198,12 @@ def simulate_orbit(coef_s, coef_p):
 
     def sindy_model(t, X):
 
+        x = X[0]
+        y = X[1]
+        z = X[2]
+
         theta_lib_r3 = []
-        theta_lib_r5 = []
-        theta_lib_r7 = []
+        binomial_terms = []
 
         r = np.array([X[0], X[1], X[2]])
         rmag = np.linalg.norm(r, axis=0)
@@ -210,26 +213,32 @@ def simulate_orbit(coef_s, coef_p):
             term = 1.0
             for i in range(3):
                 term *= X[i]**p[i]
+
             theta_lib_r3.append(term/rmag**3)
-            theta_lib_r5.append(term/rmag**5)
-            theta_lib_r7.append(term/rmag**7)
 
+        theta_lib_r3 = np.array(theta_lib_r3)
         theta_lib_r3 = theta_lib_r3[1:4]
-        theta_lib_r5 = np.concatenate((theta_lib_r5[1:4], theta_lib_r5[10:]))
-        theta_lib_r7 = theta_lib_r7[10:]
 
-        theta_vec = np.concatenate([theta_lib_r3, theta_lib_r5, theta_lib_r7])
+        binomial_terms.append(x*(5*z**2/rmag**2 - 1)/rmag**5)
+        binomial_terms.append(y*(5*z**2/rmag**2 - 1)/rmag**5)
+        binomial_terms.append(z*(5*z**2/rmag**2 - 3)/rmag**5)
+        binomial_terms = np.array(binomial_terms)
+
+        theta_vec = np.concatenate([theta_lib_r3, binomial_terms])
 
         forcing = np.array([np.dot(coef_s[i, :], theta_vec) for i in range(0, 3)])
 
         return [X[3], X[4], X[5], forcing[0], forcing[1], forcing[2]]
 
-    sol_sindy = integrate.solve_ivp(sindy_model, t_span, X0, method="LSODA", t_eval=t).y
+    sol_sindy = integrate.solve_ivp(sindy_model, t_span, X0, method="RK45", t_eval=t).y
 
     def pin_model(t, X):
+        x = X[0]
+        y = X[1]
+        z = X[2]
+
         theta_lib_r3 = []
-        theta_lib_r5 = []
-        theta_lib_r7 = []
+        binomial_terms = []
 
         r = np.array([X[0], X[1], X[2]])
         rmag = np.linalg.norm(r, axis=0)
@@ -239,22 +248,25 @@ def simulate_orbit(coef_s, coef_p):
             term = 1.0
             for i in range(3):
                 term *= X[i]**p[i]
+
             theta_lib_r3.append(term/rmag**3)
-            theta_lib_r5.append(term/rmag**5)
-            theta_lib_r7.append(term/rmag**7)
 
+        theta_lib_r3 = np.array(theta_lib_r3)
         theta_lib_r3 = theta_lib_r3[1:4]
-        theta_lib_r5 = np.concatenate((theta_lib_r5[1:4], theta_lib_r5[10:]))
-        theta_lib_r7 = theta_lib_r7[10:]
 
-        theta_vec = np.concatenate([theta_lib_r3, theta_lib_r5, theta_lib_r7])
+        binomial_terms.append(x*(5*z**2/rmag**2 - 1)/rmag**5)
+        binomial_terms.append(y*(5*z**2/rmag**2 - 1)/rmag**5)
+        binomial_terms.append(z*(5*z**2/rmag**2 - 3)/rmag**5)
+
+        theta_vec = np.concatenate([theta_lib_r3, binomial_terms])
+
 
         forcing = np.array([np.dot(coef_p[i, :], theta_vec) for i in range(0, 3)])
 
         return [X[3], X[4], X[5], forcing[0], forcing[1], forcing[2]]
 
 
-    sol_pin = integrate.solve_ivp(pin_model, t_span, X0, method="LSODA", t_eval=t).y
+    sol_pin = integrate.solve_ivp(pin_model, t_span, X0, method="RK45", t_eval=t).y
 
     return {"sindy":sol_sindy, "pin":sol_pin}
 
@@ -403,6 +415,7 @@ if plot_coef_percent:
     for i in range(len(sindy_term_error)):
         print(f"coefficient error for the library term {coef_term[i]}. SINDy term: {sindy_term[i]}. true term: {true_term[i]}. pin sindy term: {pin_term[i]}. pin sindy percent error: {pin_term_error[i]}%. sindy percent error: {sindy_term_error[i]}% ")
 
-print(f"pin coefficients: {coef_pin}")
-print(f"true coefficients: {true_coef}")
-print(f"sindy coefficiets: {coef_sindy} ")
+print(f"pin coefficients: {np.round(coef_pin, 2)}")
+print(f"true coefficients: {np.round(true_coef, 2)}")
+print(f"sindy coefficients: {np.round(coef_sindy, 2)} ")
+print(f"max absolute difference: {np.max(np.abs(coef_sindy - coef_pin))}")

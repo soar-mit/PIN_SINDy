@@ -24,7 +24,7 @@ def orbital_equation(t, X):
     M =  5.972e24 # mass of earth
     G = 1/M #6.6743e-11 # gravitational constant
     R = 1 #6.371e6 # radius of earth
-    J2 = 1.08263e0 # perturbation coefficient
+    J2 = 1.08263e-3 # perturbation coefficient
     if X[0] < R:
         raise ValueError("Satellite went inside earth.")
 
@@ -57,7 +57,7 @@ print("step 1 complete.")
 M = 5.972e24
 G = 1/M #6.6743e-11
 R = 1 #6.371e6
-J2 = 1.08263e0
+J2 = 1.08263e-3
 
 r0 = 3 #7.078e6
 theta0 = np.deg2rad(60)
@@ -124,9 +124,9 @@ fi[2, 8] = -2
 fi[2, 9] = -2
 
 dmethod = dmethods(X[0:3], t)
-sindy = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.3,
+sindy = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.08,
               norm_optimization=False, derivative="second derivative second order", regressor="lstsq")
-sindy_pin = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.3,
+sindy_pin = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.08,
                   norm_optimization=False, derivative="second derivative second order", regressor="lstsq")
 
 coef_sindy = np.round(sindy.model()['coef'], 2)
@@ -484,9 +484,9 @@ if opt_lbd_sim == True:
     plt.show()
 
 if print_sindy_coef:
-    print(f"sindy coef: {np.round(coef_sindy, 2)}")
+    print(f"sindy coef: {np.round(coef_sindy, 4)}")
 if print_pin_coef:
-    print(f"pin coef: {np.round(coef_pin, 2)}")
+    print(f"pin coef: {np.round(coef_pin, 4)}")
 if print_true_coef:
-    print(f"true coefficients: {np.round(true_coef, 2)}")
+    print(f"true coefficients: {np.round(true_coef, 4)}")
 print(f"max absolute difference: {np.max(np.abs(coef_sindy - coef_pin))}")

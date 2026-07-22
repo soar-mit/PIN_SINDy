@@ -24,7 +24,7 @@ def orbital_equation(t, X):
     M = 5.972e24 # mass of earth
     G = 1/M #6.6743e-11 # gravitational constant
     R = 1 #6.371e6 # radius of earth
-    J2 = 1.08263e-3 # perturbation coefficient
+    J2 = 1.08263e0 # perturbation coefficient
     omega_E = np.array([0, 0, 7.2921e-5])
     V = np.array([X[3], X[4], X[5]])
     r = np.array([X[0], X[1], X[2]])
@@ -54,7 +54,7 @@ def orbital_equation(t, X):
 M = 5.972e24
 G = 1/M #6.6743e-11
 R = 1 #6.371e6
-J2 = 1.08263e-3
+J2 = 1.08263e0
 r0 = np.array([1.5, 0, 1.5]) #[7000e3, 0, 1000e3]
 rmag = np.linalg.norm(r0, axis=0)
 
@@ -170,9 +170,9 @@ fi[2, 2] = -G*M
 
 dmethod = dmethods(X[0:3], t)
 sindy_pin = SINDY(dmethod, X[0:3], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib,
-                  lbd=.013, norm_optimization=True,
+                  lbd=.5, norm_optimization=True,
                   regressor="lstsq", derivative="second derivative second order")
-sindy = SINDY(dmethod, X[0:3], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.1,
+sindy = SINDY(dmethod, X[0:3], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1,
               norm_optimization=True,
               regressor="lstsq", derivative="second derivative second order")
 

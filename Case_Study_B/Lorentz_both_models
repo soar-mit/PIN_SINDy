@@ -6,7 +6,7 @@ from matplotlib.gridspec import GridSpec
 from SINDyPySource import SINDY, theta, dmethods
 
 #choose which output you would like to see:
-plot_results = False
+plot_results = True
 plot_error = True
 plot_true_vs_prior = False
 X0 = (1, 1, 1) # initial conditions that the model will use - NOT be trained on.
@@ -36,6 +36,8 @@ kappa = 3/100
 
 true_coef = np.array([[-sigma, sigma, 0, -kappa, 0, 0, 0, alpha, 0],
     [rho, -1, gamma, 0, 0, -1, 0, 0, 0], [0, -kappa, -beta, 0, 1, 0, 0, 0, 0]])
+
+
 fi = np.array([[-sigma, sigma, 0, 0, 0, 0, 0, 0, 0], [rho, -1, gamma, 0, 0, -1, 0, 0, 0],
                        [0, 0, -beta, 0, 1, 0, 0, 0, 0]])
 
@@ -43,7 +45,7 @@ t_span = (0, 20)
 t = np.linspace(0, 20, 1400)
 y0 = (1, 1, 1)
 
-x, y, z = integrate.solve_ivp(true_equation, t_span, y0, str='LSODA', t_eval=t).y
+x, y, z = integrate.solve_ivp(true_equation, t_span, y0, t_eval=t).y
 X = np.array([x, y, z])
 
 if plot_true_vs_prior:
@@ -59,7 +61,7 @@ if plot_true_vs_prior:
 
         return np.array([dx, dy, dz])
 
-    xp, yp, zp = integrate.solve_ivp(prior, t_span, y0, 'LSODA', t_eval=t).y
+    xp, yp, zp = integrate.solve_ivp(prior, t_span, y0, t_eval=t).y
 
     fig = plt.figure()
     axs = GridSpec(3, 2, width_ratios=[1, 1])
@@ -91,19 +93,20 @@ if plot_true_vs_prior:
 ######## generate PIN-SINDy model
 dmethod = dmethods(X, t)
 theta_instance = theta(X, 2)
-lbd_p = 5
-sindy_p = SINDY(dmethod, theta_instance, X, lbd_p)
+lbd_p = .0268
+sindy_p = SINDY(dmethod, X, t, t_span, y0, theta_instance=theta_instance,
+                lbd=lbd_p, regressor="lstsq")
 
 model_p = sindy_p.model(fi)
-sol_p = sindy_p.simulate(t_span, X0, t, fi=fi)
+sol_p = sindy_p.simulate(fi)
 sol_px, sol_py, sol_pz = sol_p.y
 
 ######## generate SINDy model
-lbd_s = 5
-sindy_s = SINDY(dmethod, theta_instance, X, lbd_s)
+lbd_s = .0268
+sindy_s = SINDY(dmethod, X, t, t_span, y0, theta_instance=theta_instance, lbd=lbd_s, regressor="lstsq")
 
 model_s = sindy_s.model()
-sol_s = sindy_s.simulate(t_span, X0, t)
+sol_s = sindy_s.simulate()
 sol_sx, sol_sy, sol_sz = sol_s.y
 
 ######### graph results
@@ -154,23 +157,27 @@ if plot_error:
     axs_sy = fig.add_subplot(axs[1, 0], sharex=axs_sx)
     axs_sz = fig.add_subplot(axs[2, 0], sharex=axs_sx)
 
-    axs_px.plot(t, np.abs(sol_px - X[0]))
+    axs_px.plot(t, np.abs(sol_px - X[0])/X[0])
     axs_px.set_ylabel('PIN-SINDy x error')
 
-    axs_py.plot(t, np.abs(sol_py - X[1]))
+    axs_py.plot(t, np.abs(sol_py - X[1])/X[1])
     axs_py.set_ylabel('PIN-SINDy y error')
 
-    axs_pz.plot(t, np.abs(sol_pz - X[2]))
+    axs_pz.plot(t, np.abs(sol_pz - X[2])/X[2])
     axs_pz.set_ylabel('PIN-SINDy z error')
 
-    axs_sx.plot(t, np.abs(sol_sx - X[0]))
+    axs_sx.plot(t, np.abs(sol_sx - X[0])/X[0])
     axs_sx.set_ylabel('SINDy x error')
 
-    axs_sy.plot(t, np.abs(sol_sy - X[1]))
+    axs_sy.plot(t, np.abs(sol_sy - X[1])/X[1])
     axs_sy.set_ylabel('SINDy y error')
 
-    axs_sz.plot(t, np.abs(sol_sz - X[2]))
+    axs_sz.plot(t, np.abs(sol_sz - X[2])/X[2])
     axs_sz.set_ylabel('SINDy z error')
 
-    plt.suptitle("SINDy and PIN-SINDy Error \n Initial Conditions (1, 1, 1)")
+    plt.suptitle("SINDy and PIN-SINDy Error \n Initial Conditions: {y0}")
     plt.show()
+
+print(f"true coef: {true_coef}")
+print(f"sindy coefficient error: {sindy_s.get_coef() - true_coef}")
+print(f"pin-sindy coefficients error: {sindy_p.get_coef() - true_coef}")

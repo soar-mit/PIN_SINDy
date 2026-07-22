@@ -3,7 +3,7 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from SINDy_Source_Code.SINDyPySource import SINDY, theta, dmethods
+from SINDyPySource import SINDY, theta, dmethods
 
 
 def true_equation(t, X):
@@ -60,36 +60,55 @@ theta_instance = theta(X, 2)
 #generate results:
 lbd_space = np.logspace(-7, 0, 50)
 zetaPIN = []
+pin_error = np.inf
+opt_lbd_pin = 0
 
 for lbd in lbd_space:
-    sindy_pin = SINDY(dmethod, theta_instance, X, lbd)
+    sindy_pin = SINDY(dmethod, X, t, t_span, y0, theta_instance=theta_instance, lbd=lbd, regressor="lstsq")
     model_pin = sindy_pin.model(fi)
-    sol_pin = sindy_pin.simulate(t_span, y0, t, fi=fi)
+    sol_pin = sindy_pin.simulate(fi)
     sindy_coef_pin = sindy_pin.get_coef()
-
-    zeta_term = np.linalg.norm(sindy_coef_pin - true_coef, 2)/ np.linalg.norm(sindy_coef_pin+fi, 2)
+    pin_norm = np.linalg.norm(sindy_coef_pin, 2)
+    if pin_norm == 0:
+        pin_norm == 1
+    zeta_term = np.linalg.norm(sindy_coef_pin - true_coef, 2)/ np.linalg.norm(sindy_coef_pin, 2)
     zetaPIN.append(zeta_term)
+    if zeta_term <= pin_error:
+        pin_error = zeta_term
+        opt_lbd_pin = lbd
 
 zetaPIN = np.array(zetaPIN)
 
 zetaSINDY = []
-
+sindy_error = np.inf
+opt_lbd_sindy = 0
 for lbd in lbd_space:
-    sindy = SINDY(dmethod, theta_instance, X, lbd)
+    sindy = SINDY(dmethod, X, t, t_span, y0, theta_instance=theta_instance, lbd=lbd, regressor="lstsq")
     model = sindy.model()
-    sol = sindy.simulate(t_span, y0, t)
+    sol = sindy.simulate()
     sindy_coef = sindy.get_coef()
-
-    zeta_term = np.linalg.norm(sindy_coef - true_coef, 2)/ np.linalg.norm(sindy_coef, 2)
+    norm = np.linalg.norm(sindy_coef, 2)
+    if norm == 0:
+        norm == 1
+    zeta_term = np.linalg.norm(sindy_coef - true_coef, 2)/norm
     zetaSINDY.append(zeta_term)
+
+    if zeta_term <= sindy_error:
+        sindy_error = zeta_term
+        opt_lbd_sindy = lbd
 
 zetaSINDY = np.array(zetaSINDY)
 
 plt.plot(lbd_space, zetaSINDY, label='SINDy error')
 plt.plot(lbd_space, zetaPIN, label='PIN-SINDy error')
+plt.plot(opt_lbd_pin, pin_error, marker='o', markersize=12, label="optimal pin-sindy lambda")
+plt.plot(opt_lbd_sindy, sindy_error, marker='o', markersize=12, label="optimal pure sindy lambda")
+plt.xscale("log")
 plt.xlabel('lambda values')
 plt.ylabel('coefficient error (scaled)')
-plt.title('Lorentz System Error')
+plt.title(f'Lorentz System Error. minimum pin-sindy error: {pin_error}. minimum pure sindy error: {sindy_error}.')
 plt.legend()
 plt.grid()
 plt.show()
+
+print(f"optimal pin lbd: {opt_lbd_pin}. optimal sindy lbd: {opt_lbd_sindy}")

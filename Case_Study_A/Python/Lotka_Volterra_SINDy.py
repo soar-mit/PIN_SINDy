@@ -2,14 +2,16 @@ from matplotlib.pylab import norm
 from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
-from Case_Study_C.SINDyPySource import SINDY, theta, dmethod
+from SINDyPySource import SINDY, theta, dmethods
 
 # Goal: generate Pure SINDy Model for Lotka-Volterra Equations
 
 
 # determine what output you would like to see:
-plot_error = False  #plots the error of the SINDy solution over time
+plot_error = True  #plots the error of the SINDy solution over time
 plot_results = True #plots the SINDy solution and the true solution over time.
+opt_lbd_coef = True
+opt_lbd_sim = True
 
 # create training data:
 def true_forcing(t, x):
@@ -18,7 +20,6 @@ def true_forcing(t, x):
     return [dx, dy]
 
 true_coef = np.array([[.7, 0, 0, -.5, 0], [0, -.3, 0, .2, 0]])
-fi = None
 
 x0 = [5, 2]
 
@@ -36,22 +37,12 @@ dmethod = dmethods(X, t)
 diff = dmethod.forward_difference()
 
 theta_instance = theta(X, 2)
+lbd = .01
 
-lbd_guess = np.logspace(-10, 2, 50)
-x_err = np.inf
-y_err = np.inf
-
-print(theta_instance.library().shape)
-
-sindy = SINDY(dmethod, theta_instance, X)
-model = sindy.model(fi)
-sol = sindy.simulate(t_span, x0, t)
-
-best_lbd = sindy.best_lbd(X, true_coef)
-
-solx, soly = best_lbd['sol']
-
-lbd = best_lbd['lbd']
+sindy = SINDY(dmethod, X, t, t_span, x0, theta_instance=theta_instance,
+              lbd=lbd, regressor="lstsq")
+model = sindy.model()
+solx, soly = sindy.simulate().y
 
 
 ## plot results
@@ -68,7 +59,7 @@ if plot_results:
     axs[1].set_ylabel("y")
     axs[1].set_xlabel("t")
 
-    plt.suptitle(f"Pure SINDY \n lbd={lbd: .2e} \n SINDy coefficients: {sindy.get_coef()} \n true coefficients: {true_coef} ")
+    plt.suptitle(f"Pure SINDY \n lbd={lbd: .2e} \n SINDy coefficients: {np.round(sindy.get_coef(), 2)} \n true coefficients: {true_coef} ")
     plt.tight_layout()
     plt.show()
 
@@ -82,4 +73,30 @@ if plot_error:
     axs[1].legend()
     plt.tight_layout()
 
+    plt.show()
+if opt_lbd_coef:
+    lbds = np.logspace(-5, 0, 50)
+    min_error = np.inf
+    opt_lbd = 0
+    zetas = []
+    for lbd in lbds:
+        sindy_lbd = SINDY(dmethod, X, t, t_span, x0, theta_instance=theta_instance,
+                          lbd=lbd, regressor="lstsq")
+        model_lbd = sindy_lbd.model()
+        coef_lbd = sindy_lbd.get_coef()
+        Norm = np.linalg.norm(coef_lbd)
+        if Norm == 0:
+            norm = 1
+        zeta = np.linalg.norm(abs(coef_lbd - true_coef))/Norm
+        zetas.append(zeta)
+        if zeta <= min_error:
+            min_error = zeta
+            opt_lbd = lbd
+    zetas = np.array(zetas)
+
+    plt.plot(lbds, zetas)
+    plt.plot(opt_lbd, min_error, color="r")
+    plt.xlabel("lambda values")
+    plt.ylabel("coefficient error")
+    plt.tight_layout()
     plt.show()

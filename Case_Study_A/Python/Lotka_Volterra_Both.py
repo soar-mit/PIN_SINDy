@@ -2,17 +2,18 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from Case_Study_B.SINDyPySource import SINDY, theta, dmethods
+from SINDyPySource import SINDY, theta, dmethods
 
 # Goal: generate Pure SINDy and PIN-SINDy model for comparison. for Lotka-Volterra Equations
-true_vs_prior = False
-plot_model = True
-plot_error = True
+true_vs_prior = True
+plot_model = False
+plot_error = False
+print("code is running...")
 
 # create training data:
 def true_forcing(t, x):
-    dx = .5*x[0] - .2*x[0]*x[1] - .1*x[0]**2
-    dy = -.3*x[1] + .4*x[0]*x[1] - .1*x[1]**2
+    dx = .5*x[0] - .2*x[0]*x[1] - x[0]**2*x[1]
+    dy = -.3*x[1] + .4*x[0]*x[1] - x[1]**2*x[0]
     return [dx, dy]
 
 def prior_forcing(t, x):
@@ -20,9 +21,21 @@ def prior_forcing(t, x):
     dy = x[0]*x[1] - x[1]
     return [dx, dy]
 
+true_coef = np.zeros((2, 9))
+true_coef[0, 0] = .5
+true_coef[0, 3] = -.2
+true_coef[0, 6] = -1
 
-true_coef = np.array([[.5, 0, -.1, -.2, 0], [0, -.3, 0, .4, -.1]])
-fi = np.array([[1, 0, 0, -1, 0], [0, -1, 0, 1, 0]])
+
+true_coef[1, 1] = -.3
+true_coef[1, 3] = .4
+true_coef[1, 7] = -1
+
+fi = np.zeros((2, 9))
+fi[0, 0] = 1
+fi[0, 3] = -1
+fi[1, 1] = -1
+fi[1, 3] = 1
 
 x0 = [5, 2]
 
@@ -30,6 +43,7 @@ t = np.linspace(0, 20, 20000)
 t_span = (0, 20)
 
 true_sol = integrate.solve_ivp(true_forcing, t_span, x0, t_eval=t)
+print("model created...")
 x, y = true_sol.y
 X = np.array((x, y))
 
@@ -37,15 +51,18 @@ X = np.array((x, y))
 
 dmethod = dmethods(X, t)
 
-theta_instance = theta(X, 2)
+theta_instance = theta(X, 3)
 
-sindy_pin = SINDY(dmethod, X, t, t_span, x0, theta_instance=theta_instance, lbd=.001, regressor="lstsq")
+sindy_pin = SINDY(dmethod, X, t, t_span, x0, theta_instance=theta_instance, lbd=.005, regressor="lasso")
+print("pin-sindy model created...")
 model_pin = sindy_pin.model(fi)
 sol_pin = sindy_pin.simulate(fi).y
+print("pin-sindy model simulated...")
 
 #create pure SINDy object
 
-sindy_pure = SINDY(dmethod, X, t, t_span, x0, theta_instance=theta_instance, lbd=.001, regressor="lstsq")
+sindy_pure = SINDY(dmethod, X, t, t_span, x0, theta_instance=theta_instance, lbd=1, regressor="lasso")
+print("sindy model created...")
 model_pure = sindy_pure.model()
 sol_pure = sindy_pure.simulate().y
 
@@ -91,6 +108,7 @@ if true_vs_prior:
     plt.show()
 
 if plot_model:
+    print("plotting model...")
     fig, axs = plt.subplots(2,1)
 
     pinx, piny = sol_pin
@@ -98,13 +116,13 @@ if plot_model:
 
     axs[0].plot(t, pinx, 'b-', label='PIN-SINDy')
     axs[0].plot(t, purex, 'y-', label='pure SINDy')
-    axs[0].plot(t, x, label="model")
+    axs[0].plot(t, x, 'r-', linestyle="dashed", label="model")
     axs[0].set_ylabel("x")
     axs[0].legend()
 
     axs[1].plot(t, piny, 'b-', label="PIN-SINDy")
     axs[1].plot(t, purey, 'y-', label="pure SINDy")
-    axs[1].plot(t, y, label="model")
+    axs[1].plot(t, y, 'r-', linestyle="dashed", label="model")
     axs[1].set_ylabel("y")
     axs[1].legend()
 
@@ -134,3 +152,6 @@ if plot_error:
     axs[0, 1].set_title("pure sindy model")
     plt.tight_layout()
     plt.show()
+
+print(f'sindy difference: {abs(true_coef - sindy_pure.get_coef())}')
+print(f'pin sindy difference: {abs(true_coef - sindy_pin.get_coef())}')

@@ -8,7 +8,6 @@ from SINDyPySource import SINDY, theta, dmethods
 true_vs_prior = True
 plot_model = False
 plot_error = False
-print("code is running...")
 
 # create training data:
 def true_forcing(t, x):
@@ -43,7 +42,6 @@ t = np.linspace(0, 20, 20000)
 t_span = (0, 20)
 
 true_sol = integrate.solve_ivp(true_forcing, t_span, x0, t_eval=t)
-print("model created...")
 x, y = true_sol.y
 X = np.array((x, y))
 
@@ -53,8 +51,7 @@ dmethod = dmethods(X, t)
 
 theta_instance = theta(X, 3)
 
-sindy_pin = SINDY(dmethod, X, t, t_span, x0, theta_instance=theta_instance, lbd=.005, regressor="lasso")
-print("pin-sindy model created...")
+sindy_pin = SINDY(dmethod, X, t, t_span, x0, theta_instance=theta_instance, lbd=.01, regressor="lasso")
 model_pin = sindy_pin.model(fi)
 sol_pin = sindy_pin.simulate(fi).y
 print("pin-sindy model simulated...")

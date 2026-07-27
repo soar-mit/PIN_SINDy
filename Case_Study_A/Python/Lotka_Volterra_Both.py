@@ -2,11 +2,11 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from SINDyPySource import SINDY, theta, dmethods
+from Case_Study_C.SINDyPySource import SINDY, theta, dmethods
 
 # Goal: generate Pure SINDy and PIN-SINDy model for comparison. for Lotka-Volterra Equations
 true_vs_prior = True
-plot_model = False
+plot_model = True
 plot_error = False
 
 # create training data:

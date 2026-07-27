@@ -1,7 +1,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from Case_Study_A.Python.SINDyPySource import SINDY, dmethods, theta
+from Case_Study_C.SINDyPySource import SINDY, dmethods, theta
 from scipy import integrate
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d  import Line3DCollection

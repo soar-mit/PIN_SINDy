@@ -11,7 +11,7 @@ t_span = (0, 25). Time steps not given so try 2500.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from Case_Study_A.Python.SINDyPySource import SINDY, dmethods, theta
+from Case_Study_C.SINDyPySource import SINDY, dmethods, theta
 from scipy import integrate
 
 def linear(t, x):

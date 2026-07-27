@@ -17,11 +17,15 @@ opt_lbd_sim = False
 print_sindy_coef = False
 print_pin_coef = False
 
-#step 1: define true and prior equation
+num_orbits = 2
+points_per_orbit = 6
+
+#step 1: define true and prior equation  ## using km instead of m
 M =  1.080318e20
-G = 6.6743e-11
-R = 2.521e5 #6.371e6 # radius of earth
+G = 6.6743e-20
+R = 2.521e2
 J2 = 5.4352e-3 # perturbation coefficient
+
 
 def orbital_equation(t, X):
     # X = [r theta, phi, dr, dtheta, dphi]
@@ -54,15 +58,15 @@ def orbital_equation(t, X):
 print("step 1 complete.")
 # step 2: find initial conditions:
 
-r0 = 7.078e7
+r0 = 7.078e3
 theta0 = np.deg2rad(60)
 
 X0 = [r0, theta0, 0, 0, 0, ((G*M/(r0)**3)**.5)/np.sin(theta0)]
 
 #calculate period:
 T = 2*np.pi*(X0[0]**3 / (G*M))**(1/2)
-t_span = (0, 10*(int(T)))
-t = np.linspace(t_span[0], t_span[1], 30*(int(T)))
+t_span = (0, num_orbits*(int(T)))
+t = np.linspace(t_span[0], t_span[1], points_per_orbit*(int(T)))
 
 r, thet, phi, dr , dthet, dphi = integrate.solve_ivp(orbital_equation, t_span, X0, t_eval=t,  method="LSODA").y
 X = np.array([r, thet, phi, dr, dthet, dphi])
@@ -75,7 +79,7 @@ print("step 2 complete.")
 
 
 #Step 3: Create theta matrix
-theta_lib = np.zeros((10, 30*(int(T))))
+theta_lib = np.zeros((10, points_per_orbit*(int(T))))
 theta_lib[0,:] = r*dthet**2
 theta_lib[1,:] = r*np.sin(thet)**2*dphi**2
 theta_lib[2,:] = r**(-2)

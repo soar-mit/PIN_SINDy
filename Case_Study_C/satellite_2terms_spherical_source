@@ -10,21 +10,22 @@ from matplotlib.gridspec import GridSpec
 #step 0: determine which output you would like to see.
 plot_true_vs_prior = True
 print_true_coef = True
-opt_lbd_coef = False
+opt_lbd_coef = True
 plot_error = False
 plot_model = False
 opt_lbd_sim = False
-print_sindy_coef = False
-print_pin_coef = False
+print_sindy_coef = True
+print_pin_coef = True
 
 num_orbits = 2
 points_per_orbit = 6
 
-#step 1: define true and prior equation  ## using km instead of m
-M =  1.080318e20
+#step 1: define true and prior equation  ## using km instead of m.
 G = 6.6743e-20
+M = 1.080318e20
 R = 2.521e2
 J2 = 5.4352e-3 # perturbation coefficient
+r0 = 7.078e2
 
 
 def orbital_equation(t, X):
@@ -58,7 +59,6 @@ def orbital_equation(t, X):
 print("step 1 complete.")
 # step 2: find initial conditions:
 
-r0 = 7.078e3
 theta0 = np.deg2rad(60)
 
 X0 = [r0, theta0, 0, 0, 0, ((G*M/(r0)**3)**.5)/np.sin(theta0)]
@@ -484,8 +484,8 @@ if opt_lbd_sim == True:
 
 if print_sindy_coef:
     print(f"sindy coef: {np.round(coef_sindy, 4)}")
-if print_pin_coef:
     print(f"pin coef: {np.round(coef_pin, 4)}")
+    print(f"max absolute difference: {np.max(np.abs(coef_sindy - coef_pin))}")
+
 if print_true_coef:
     print(f"true coefficients: {np.round(true_coef, 4)}")
-print(f"max absolute difference: {np.max(np.abs(coef_sindy - coef_pin))}")

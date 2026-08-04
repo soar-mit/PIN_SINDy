@@ -47,102 +47,68 @@ class theta:
 class dmethods:
 
     def __init__(self, x, t):
-        """x: list of state variables (list of list)
-        t: list of time stamps. """
         self.dt = t[1] - t[0]
         self.x = x
         self.t = t
 
-
     def differential(self, var):
-        "returns approximate differentation using central finite difference method."
-        "t: list of floats "
-        "x: list of floats: one state variable at different times."
-
-        f = np.gradient(var, self.dt)
-        return f
+        return np.gradient(var, self.dt)
 
     def forward_difference(self):
-        "returns differentation of each state variable (ex: [grad x1, grad x2, grad x3, ...])"
-        x = self.x
-        f = []
-        for var in x:
-            f.append(self.differential(var))
-        f = np.array(f)
-        f = np.clip(f, -1e6, 1e6)
-        return f
+        f = np.gradient(self.x, self.dt, axis=1)  # vectorized across all rows at once
+        return np.clip(f, -1e6, 1e6)
 
     def second_differential(self, var):
-        """
-        computes second derivative forward difference for the first index of var, backwards difference for the last index of var,
-        and central difference for all other indices of var.
-        """
-        var_2f = np.zeros((len(var)))
-        var_2f[0] = (var[2] - 2*var[1] + var[0])/self.dt**2 #forward difference
+        var_2f = np.empty_like(var, dtype=float)
+        dt2 = self.dt**2
 
-        for i in range(1, len(var)-1):
-            var_2f[i] = (var[i+1] - 2*var[i] + var[i-1])/self.dt**2 # central difference
+        # central difference, all interior points at once
+        var_2f[1:-1] = (var[2:] - 2*var[1:-1] + var[:-2]) / dt2
 
-        var_2f[-1] = (var[-1] - 2*var[-2] + var[-3])/self.dt**2
-
+        # your boundary formulas, unchanged
+        var_2f[0]  = (var[2] - 2*var[1] + var[0]) / dt2
+        var_2f[-1] = (var[-1] - 2*var[-2] + var[-3]) / dt2
         return var_2f
 
-
-
     def second_forward_difference(self):
-        rows, columns = self.x.shape ## x shape: state variables x time steps
-        x_2f = np.zeros((rows, columns))
-        for i in range(rows):
-            x_2f[i, :] = self.second_differential(self.x[i,:])
-        return x_2f
+        rows = self.x.shape[0]
+        return np.array([self.second_differential(self.x[i, :]) for i in range(rows)])
 
     def order_2_differential(self, var):
-        "computes first derivative to the SECOND ORDER of error (second order for first and last, "
-        "fourth order for all others.)"
-
         dt = self.dt
+        var_1 = np.empty_like(var, dtype=float)
 
-        var_1 = np.zeros((len(var)))
-        var_1[0] = (-25*var[0] + 48*var[1] - 36*var[2] + 16*var[3] - 3*var[4])/(12*dt)
-        var_1[1] = (-25*var[1] + 48*var[2] - 36*var[3] + 16*var[4] - 3*var[5])/(12*dt)
+        # 4th-order central difference, all interior points at once
+        var_1[2:-2] = (-var[4:] + 8*var[3:-1] - 8*var[1:-3] + var[0:-4]) / (12*dt)
 
-        for i in range(2, len(var)-2):
-            var_1[i] = (-var[i+2] + 8*var[i+1] - 8*var[i-1] + var[i-2])/(12*dt)
-
-        var_1[-2] = (25*var[-2] - 48*var[-3] + 36*var[-4] - 16*var[-5] + 3*var[-6])/(12*dt)
-        var_1[-1] = (25*var[-1] - 48*var[-2] + 36*var[-3] - 16*var[-4] + 3*var[-5])/(12*dt)
-
+        # boundary stencils, unchanged
+        var_1[0] = (-25*var[0] + 48*var[1] - 36*var[2] + 16*var[3] - 3*var[4]) / (12*dt)
+        var_1[1] = (-25*var[1] + 48*var[2] - 36*var[3] + 16*var[4] - 3*var[5]) / (12*dt)
+        var_1[-2] = (25*var[-2] - 48*var[-3] + 36*var[-4] - 16*var[-5] + 3*var[-6]) / (12*dt)
+        var_1[-1] = (25*var[-1] - 48*var[-2] + 36*var[-3] - 16*var[-4] + 3*var[-5]) / (12*dt)
         return var_1
 
     def order_2_forward_difference(self):
-        rows, columns = self.x.shape
-        x_1 = np.zeros((rows, columns))
-        for i in range(rows):
-            x_1[i,:] = self.order_2_differential(self.x[i,:])
-        return x_1
+        rows = self.x.shape[0]
+        return np.array([self.order_2_differential(self.x[i, :]) for i in range(rows)])
 
     def order_2_second_differential(self, var):
         dt = self.dt
+        var_2f = np.empty_like(var, dtype=float)
 
-        var_2f = np.zeros((len(var)))
+        # 4th-order central second difference, all interior points at once
+        var_2f[2:-2] = (-var[4:] + 16*var[3:-1] - 30*var[2:-2] + 16*var[1:-3] - var[0:-4]) / (12*dt**2)
 
-        var_2f[0] = (2*var[0] - 5*var[1] + 4*var[2] - var[3])/(dt**2)
-        var_2f[1] = (2*var[1] - 5*var[2] + 4*var[3] - var[4])/(dt**2)
-
-        for i in range(2, len(var)-2):
-            var_2f[i] = (-var[i+2] + 16*var[i+1] - 30*var[i] + 16*var[i-1] - var[i-2])/(12*dt**2)
-
-        var_2f[-2] = (2*var[-2] - 5*var[-3] + 4*var[-4] - var[-5])/(dt**2)
-        var_2f[-1] = (2*var[-1] - 5*var[-2] + 4*var[-3] - var[-4])/(dt**2)
+        # boundary stencils, unchanged
+        var_2f[0] = (2*var[0] - 5*var[1] + 4*var[2] - var[3]) / dt**2
+        var_2f[1] = (2*var[1] - 5*var[2] + 4*var[3] - var[4]) / dt**2
+        var_2f[-2] = (2*var[-2] - 5*var[-3] + 4*var[-4] - var[-5]) / dt**2
+        var_2f[-1] = (2*var[-1] - 5*var[-2] + 4*var[-3] - var[-4]) / dt**2
         return var_2f
 
     def order_2_second_forward_difference(self):
-        rows, columns = self.x.shape
-        x_2 = np.zeros((rows, columns))
-        for i in range(rows):
-            x_2[i,:] = self.order_2_second_differential(self.x[i,:])
-        return x_2
-
+        rows = self.x.shape[0]
+        return np.array([self.order_2_second_differential(self.x[i, :]) for i in range(rows)])
 
 class STLSQ:
 

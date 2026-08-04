@@ -1,0 +1,258 @@
+from scipy import integrate
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+from SINDyPySource import SINDY, theta, dmethods
+
+# Goal: generate Pure SINDy and PIN-SINDy model for comparison. for Lotka-Volterra Equations
+true_vs_prior = False
+coef_error_norm = True
+coef_error_each = False
+
+# create training data:
+def true_forcing(t, x):
+    dx = .5*x[0] - .2*x[0]*x[1] - x[0]**2*x[1]
+    dy = -.3*x[1] + .4*x[0]*x[1] - x[1]**2*x[0]
+    return [dx, dy]
+
+def prior_forcing(t, x):
+    dx = x[0] - x[0]*x[1]
+    dy = x[0]*x[1] - x[1]
+    return [dx, dy]
+
+true_coef = np.zeros((2, 9))
+true_coef[0, 0] = .5
+true_coef[0, 3] = -.2
+true_coef[0, 6] = -1
+
+
+true_coef[1, 1] = -.3
+true_coef[1, 3] = .4
+true_coef[1, 7] = -1
+
+fi = np.zeros((2, 9))
+fi[0, 0] = 1
+fi[0, 3] = -1
+fi[1, 1] = -1
+fi[1, 3] = 1
+
+x0 = [5, 2]
+
+t = np.linspace(0, 20, 2000)
+t_span = (0, 20)
+
+true_sol = integrate.solve_ivp(true_forcing, t_span, x0, t_eval=t)
+x, y = true_sol.y
+X = np.array((x, y))
+
+#create PIN-SINDy object to train data
+
+dmethod = dmethods(X, t)
+
+theta_instance = theta(X, 3)
+
+
+plt.rcParams["font.family"] = "serif"
+
+if true_vs_prior:
+
+    prior_sol = integrate.solve_ivp(prior_forcing, t_span, x0, t_eval=t)
+
+    fig = plt.figure()
+    axs = GridSpec(2, 2, width_ratios=[1, 1])
+    axs1 = fig.add_subplot(axs[0, 1])
+    axs2= fig.add_subplot(axs[1, 1], sharex=axs1)
+    axs3 = fig.add_subplot(axs[:, 0])
+
+    x, y = X
+    priorx, priory = prior_sol.y
+
+    axs1.plot(t, x, 'b-', label='true')
+    axs1.plot(t, priorx, 'y-', linestyle="dashed", label='prior')
+    axs1.set_ylabel("x")
+    axs1.legend()
+
+    axs2.plot(t, y, 'b-')
+    axs2.plot(t, priory, 'y-', linestyle="dashed")
+    axs2.set_ylabel("y")
+    axs2.legend()
+
+
+    fig.supxlabel("t")
+
+    axs3.plot(x, y, 'b-', label="true")
+    axs3.plot(priorx, priory, 'y-', linestyle="dashed", label="prior")
+    axs3.set_ylabel("y")
+    axs3.set_xlabel("x")
+    axs3.legend()
+
+    plt.suptitle(f"true vs prior equations")
+    plt.tight_layout()
+    plt.show()
+
+lbds = np.logspace(-8, 2, 100)
+
+if coef_error_each:
+
+
+    zeta_sindy_x = []
+    zeta_pin_x = []
+    zeta_sindy_y = []
+    zeta_pin_y = []
+    zeta_sindy_x_xy = []
+    zeta_pin_x_xy = []
+    zeta_sindy_y_xy = []
+    zeta_pin_y_xy = []
+    zeta_sindy_x2y = []
+    zeta_pin_x2y = []
+    zeta_sindy_y2x = []
+    zeta_pin_y2x = []
+
+    for lbd in lbds:
+        sindy_l = SINDY(dmethod, X, t_eval=t, t_span=t_span, u0=x0, theta_instance=theta_instance,
+                        norm_optimization=True, lbd=lbd, regressor = "lstsq")
+        coef_sindy_l = sindy_l.model()['coef']
+        coef_pin_l = sindy_l.model(fi)['coef']
+
+        zeta_sindy_x.append(abs((coef_sindy_l[0,0]-true_coef[0, 0])/coef_sindy_l[0,0]))
+        zeta_pin_x.append(abs((coef_pin_l[0,0]-true_coef[0, 0])/coef_pin_l[0,0]))
+
+        zeta_sindy_y.append(abs((coef_sindy_l[1,1]-true_coef[1,1])/coef_sindy_l[1,1]))
+        zeta_pin_y.append(abs((coef_pin_l[1,1]-true_coef[1,1])/coef_pin_l[1,1]))
+
+        zeta_sindy_x_xy.append(abs((coef_sindy_l[0,3]-true_coef[0,3])/coef_sindy_l[0,3]))
+        zeta_pin_x_xy.append(abs((coef_pin_l[0,3] - true_coef[0,3])/coef_pin_l[0,3]))
+
+        zeta_sindy_y_xy.append(abs((coef_sindy_l[1,3] - true_coef[1,3])/coef_sindy_l[1,3]))
+        zeta_pin_y_xy.append(abs((coef_pin_l[1,3] - true_coef[1,3])/coef_pin_l[1,3]))
+
+        zeta_sindy_x2y.append(abs((coef_sindy_l[0,6] - true_coef[0,6])/coef_sindy_l[0,6]))
+        zeta_pin_x2y.append(abs((coef_pin_l[0,6] - true_coef[0,6])/coef_pin_l[0,6]))
+
+        zeta_sindy_y2x.append(abs((coef_sindy_l[1,7] - true_coef[1,7])/coef_sindy_l[1,7]))
+        zeta_pin_y2x.append(abs((coef_pin_l[1,7] - true_coef[1,7])/coef_pin_l[1,7]))
+
+    zeta_sindy_x = np.array(zeta_sindy_x)
+    zeta_pin_x = np.array(zeta_pin_x)
+    zeta_sindy_y = np.array(zeta_sindy_y)
+    zeta_pin_y = np.array(zeta_pin_y)
+    zeta_sindy_x_xy = np.array(zeta_sindy_x_xy)
+    zeta_pin_x_xy = np.array(zeta_pin_x_xy)
+    zeta_sindy_y_xy = np.array(zeta_sindy_y_xy)
+    zeta_pin_y_xy = np.array(zeta_pin_y_xy)
+    zeta_sindy_x2y = np.array(zeta_sindy_x2y)
+    zeta_pin_x2y = np.array(zeta_pin_x2y)
+    zeta_sindy_y2x = np.array(zeta_sindy_y2x)
+    zeta_pin_y2x = np.array(zeta_pin_y2x)
+
+    fix, axs = plt.subplots(3)
+    axs[0].plot(lbds, zeta_sindy_x, label="sindy")
+    axs[0].plot(lbds, zeta_pin_x, label="pin-sindy")
+    axs[0].set_xscale('log')
+    axs[0].set_ylabel('normalized x coefficient error.')
+    axs[0].legend()
+    axs[0].set_title(f'x coefficient error in dx/dt. Minimum for sindy: {min(zeta_sindy_x)}. Minimum for pin-sindy: {min(zeta_pin_x)}')
+
+    axs[1].plot(lbds, zeta_sindy_x_xy)
+    axs[1].plot(lbds, zeta_pin_x_xy)
+    axs[1].set_xscale('log')
+    axs[1].set_ylabel('normalized xy coefficient error.')
+    axs[1].set_title(f'x coefficient error in dx/dt. Minimum for sindy: {min(zeta_sindy_x_xy)}. Minimum for pin-sindy: {min(zeta_pin_x_xy)}')
+
+    axs[2].plot(lbds, zeta_sindy_x2y)
+    axs[2].plot(lbds, zeta_pin_x2y)
+    axs[2].set_xscale('log')
+    axs[2].set_ylabel('normalized x^2y coefficient error.')
+    axs[2].set_title(f'x^2y coefficient error in dx/dt. Minimum for sindy: {min(zeta_sindy_x2y)}. Minimum for pin-sindy: {min(zeta_pin_x2y)}')
+
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    fig, axs= plt.subplots(3)
+
+    axs[0].plot(lbds, zeta_sindy_y, label="sindy")
+    axs[0].plot(lbds, zeta_pin_y, label="pin-sindy")
+    axs[0].set_xscale('log')
+    axs[0].legend()
+    axs[0].set_ylabel('normalized y coefficient error.')
+    axs[0].set_title(f'y coefficient error in dy/dt. Minimum for sindy: {min(zeta_sindy_y)}. Minimum for pin-sindy: {min(zeta_pin_y)}')
+
+    axs[1].plot(lbds, zeta_sindy_y_xy)
+    axs[1].plot(lbds, zeta_pin_y_xy)
+    axs[1].set_xscale('log')
+    axs[1].set_ylabel('normalized xy coefficient error.')
+    axs[1].set_title(f'xy coefficient error in dy/dt. Minimum for sindy: {min(zeta_sindy_y_xy)}. Minimum for pin-sindy: {min(zeta_pin_y_xy)}')
+
+    axs[2].plot(lbds, zeta_sindy_x)
+    axs[2].plot(lbds, zeta_pin_x)
+    axs[2].set_xscale('log')
+    axs[2].set_ylabel('normalized y^2 coefficient error.')
+    axs[2].set_title(f'y^2 coefficient error in dy/dt. Minimum for sindy: {min(zeta_sindy_y2x)}. Minimum for pin-sindy: {min(zeta_pin_y2x)}')
+
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+if coef_error_norm:
+    error_cap = 1
+    zeta_sindy = []
+    zeta_pin = []
+
+    min_error_sindy = np.inf
+    opt_lbd_sindy = 0
+    lbds_sindy_ok = 0
+
+    min_error_pin = np.inf
+    opt_lbd_pin = 0
+    lbds_pin_ok = 0
+
+    for lbd in lbds:
+        sindy_l = SINDY(dmethod, X, t_eval=t, t_span=t_span, u0=x0, theta_instance=theta_instance,
+                        norm_optimization=True, lbd=lbd, regressor = "lstsq")
+        coef_sindy_l = sindy_l.model()['coef']
+        coef_pin_l = sindy_l.model(fi)['coef']
+        sindy_norm = abs(np.linalg.norm(coef_sindy_l))
+        if sindy_norm == 0:
+            sindy_norm = 1
+        zeta_term_sindy = np.linalg.norm(abs(coef_sindy_l - true_coef)) / sindy_norm
+        zeta_sindy.append(zeta_term_sindy)
+
+        if zeta_term_sindy <= min_error_sindy:
+            min_error_sindy = zeta_term_sindy
+            opt_lbd_sindy = lbd
+
+        if zeta_term_sindy < error_cap:
+            lbds_sindy_ok += 1
+
+        pin_norm = abs(np.linalg.norm(coef_pin_l))
+        if pin_norm == 0:
+            pin_norm = 1
+
+        zeta_term_pin = np.linalg.norm(abs(coef_pin_l - true_coef)) / pin_norm
+        zeta_pin.append(zeta_term_pin)
+
+        if zeta_term_pin <= min_error_pin:
+            min_error_pin = zeta_term_pin
+            opt_lbd_pin = lbd
+        if zeta_term_pin < error_cap:
+            lbds_pin_ok += 1
+
+    zeta_sindy = np.array(zeta_sindy)
+    zeta_pin = np.array(zeta_pin)
+
+    fix, axs = plt.subplots(2, 1)
+    axs[0].plot(lbds, zeta_sindy)
+    axs[0].plot(opt_lbd_sindy, min_error_sindy, marker='o', markersize=12)
+    axs[0].set_xscale('log')
+    axs[0].set_ylabel('normalized sindy coefficient error.')
+    axs[0].set_title(f'optimal lambda value is: {opt_lbd_sindy} with minimal error {min_error_sindy}. lambdas producing normalized error less than {error_cap}: {lbds_sindy_ok} ')
+
+    axs[1].plot(lbds, zeta_pin)
+    axs[1].plot(opt_lbd_pin, min_error_pin, marker='o', markersize=12)
+    axs[1].set_xlabel('lambda values')
+    axs[1].set_xscale('log')
+    axs[1].set_ylabel('normalized pin-sindy coefficient error.')
+    axs[1].set_title(f'optimal lambda value is: {opt_lbd_pin} with minimal error {min_error_pin}. lambdas producing normalized error less than {error_cap}: {lbds_pin_ok}')
+
+    plt.show()

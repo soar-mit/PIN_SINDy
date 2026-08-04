@@ -288,7 +288,6 @@ if opt_lbd_coef:
         else:
             print(f'lambda causing sindy error: {lbd}.')
             zeta_sindy.append(1000)
-
         pin_norm = np.linalg.norm(coef_pin_l, 2)
 
         if pin_norm != 0 :

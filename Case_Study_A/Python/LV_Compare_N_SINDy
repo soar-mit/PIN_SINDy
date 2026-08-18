@@ -1,7 +1,7 @@
 from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
-from SINDyPySource import SINDY, theta, dmethods
+from PIN_SINDy.Case_Study_B.SINDyPySource import SINDY, theta, dmethods
 #determine whether you would like noise or not:
 add_noise = False
 

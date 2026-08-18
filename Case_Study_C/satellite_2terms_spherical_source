@@ -8,24 +8,25 @@ from matplotlib.gridspec import GridSpec
 # Goal: to find the density constant and synthetic atmospheric density constant in a
 #  hypothetical satellite orbit using SINDy and PIN-SINDy.
 #step 0: determine which output you would like to see.
-plot_true_vs_prior = True
+plot_true_vs_prior = False
 print_true_coef = True
 opt_lbd_coef = True
-plot_error = False
-plot_model = False
-opt_lbd_sim = False
+plot_error = True
+plot_model = True
+opt_lbd_sim = True
 print_sindy_coef = True
 print_pin_coef = True
+opt_lbd_ind_coef = True
 
-num_orbits = 2
+num_orbits = 4
 points_per_orbit = 6
 
 #step 1: define true and prior equation  ## using km instead of m.
-G = 6.6743e-20
-M = 1.080318e20
-R = 2.521e2
-J2 = 5.4352e-3 # perturbation coefficient
-r0 = 7.078e2
+G = 6.6743e-11 ## e-11
+M = 1/G
+R = 1
+J2 = 1.08e-3 # perturbation coefficient
+r0 = 1.5
 
 
 def orbital_equation(t, X):
@@ -123,10 +124,10 @@ fi[2, 8] = -2
 fi[2, 9] = -2
 
 dmethod = dmethods(X[0:3], t)
-sindy = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.08,
-              norm_optimization=False, derivative="second derivative second order", regressor="lstsq")
-sindy_pin = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.08,
-                  norm_optimization=False, derivative="second derivative second order", regressor="lstsq")
+sindy = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.0204,
+              norm_optimization=True, derivative="second derivative second order", regressor="lstsq")
+sindy_pin = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1,
+                  norm_optimization=True, derivative="second derivative second order", regressor="lstsq")
 
 coef_sindy = np.round(sindy.model()['coef'], 2)
 coef_pin = np.round(sindy_pin.model(fi)['coef'], 2)
@@ -200,9 +201,6 @@ print("step 5 complete.")
 
 if plot_true_vs_prior:
     def prior_equation(t, X):
-        M = 5.972e24
-        G = 1/M #6.6743e-11
-        R = 1 #6.371e6 # radius of earth
 
         if X[0] < R:
             raise ValueError("Satellite went inside earth.")
@@ -241,27 +239,27 @@ if plot_true_vs_prior:
     axs_z = fig.add_subplot(axs[2, 1], sharex=axs_x)
     axs0 = fig.add_subplot(axs[:, 0], projection='3d')
 
-    axs_x.plot(t, x)
-    axs_x.plot(t, xp, linestyle="dashed")
+    axs_x.plot(t, x, color="khaki")
+    axs_x.plot(t, xp, linestyle="dashed", color="thistle")
     axs_x.set_ylabel('x')
 
-    axs_y.plot(t, y)
-    axs_y.plot(t, yp, linestyle="dashed")
+    axs_y.plot(t, y, color="khaki")
+    axs_y.plot(t, yp, linestyle="dashed", color="thistle")
     axs_y.set_ylabel('y')
 
-    axs_z.plot(t, z)
-    axs_z.plot(t, zp, linestyle="dashed")
+    axs_z.plot(t, z, color="khaki")
+    axs_z.plot(t, zp, linestyle="dashed", color="thistle")
     axs_z.set_ylabel('z')
     axs_z.set_xlabel('t')
 
-    axs0.plot(x, y, z, label="true")
-    axs0.plot(xp, yp, zp, label="prior", linestyle="dashed")
+    axs0.plot(x, y, z, label="true", color="khaki")
+    axs0.plot(xp, yp, zp, label="prior", linestyle="dashed", color="thistle")
 
     fig.legend()
     plt.show()
 
 if opt_lbd_coef:
-    lbds = np.logspace(-3, 0, 50)
+    lbds = np.logspace(-8, 1, 100)
     zeta_sindy = []
     zeta_pin = []
 
@@ -273,50 +271,57 @@ if opt_lbd_coef:
 
     for lbd in lbds:
         sindy_l = SINDY(dmethod, X[3:], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib,
-                        norm_optimization=False, lbd=lbd, derivative="second derivative second order", regressor = "lstsq")
+                        norm_optimization=True, lbd=lbd, derivative="second derivative second order", regressor = "lstsq")
         coef_sindy_l = sindy_l.model()['coef']
         coef_pin_l = sindy_l.model(fi)['coef']
         sindy_norm = np.linalg.norm(coef_sindy_l, 2)
 
-        if sindy_norm != 0:
-            zeta_term_sindy = np.linalg.norm(coef_sindy_l - true_coef, 2) / sindy_norm
-            zeta_sindy.append(zeta_term_sindy)
+        if sindy_norm == 0:
+            sindy_norm = 1
+        zeta_term_sindy = np.linalg.norm(coef_sindy_l - true_coef, 2) / sindy_norm
+        zeta_sindy.append(zeta_term_sindy)
 
-            if zeta_term_sindy <= min_error_sindy:
-                min_error_sindy = zeta_term_sindy
-                opt_lbd_sindy = lbd
-        else:
-            print(f'lambda causing sindy error: {lbd}.')
-            zeta_sindy.append(1000)
+        if zeta_term_sindy <= min_error_sindy:
+            min_error_sindy = zeta_term_sindy
+            opt_lbd_sindy = lbd
+
         pin_norm = np.linalg.norm(coef_pin_l, 2)
 
-        if pin_norm != 0 :
-            zeta_term_pin = np.linalg.norm(coef_pin_l - true_coef, 2) / pin_norm
-            zeta_pin.append(zeta_term_pin)
+        if pin_norm == 0 :
+            pin_norm = 1
 
-            if zeta_term_pin <= min_error_pin:
-                min_error_pin = zeta_term_pin
-                opt_lbd_pin = lbd
-        else:
-            print(f'lambda causing pin sindy error: {lbd}.')
-            zeta_pin.append(1000)
+        zeta_term_pin = np.linalg.norm(coef_pin_l - true_coef, 2) / pin_norm
+        zeta_pin.append(zeta_term_pin)
+
+        if zeta_term_pin <= min_error_pin:
+            min_error_pin = zeta_term_pin
+            opt_lbd_pin = lbd
 
     zeta_sindy = np.array(zeta_sindy)
     zeta_pin = np.array(zeta_pin)
 
-    fix, axs = plt.subplots(2, 1)
-    axs[0].plot(lbds, zeta_sindy)
-    axs[0].plot(opt_lbd_sindy, min_error_sindy, marker='o', markersize=12)
-    axs[0].set_xscale('log')
-    axs[0].set_ylabel('normalized sindy coefficient error.')
-    axs[0].set_title(f'optimal lambda value is: {opt_lbd_sindy} with minimal error {min_error_sindy}.')
+    plt.plot(lbds, zeta_sindy, color="lightcoral")
+    plt.plot(opt_lbd_sindy, min_error_sindy, marker='o', markersize=5, color="firebrick")
+    plt.xscale('log')
+    plt.ylabel('normalized coefficient error.')
+    plt.annotate(
+        f'pin min: {min_error_pin:.3g}\nλ={opt_lbd_pin:.3g}',
+        xy=(opt_lbd_pin, min_error_pin),
+        xytext=(-100, 25), textcoords='offset points',
+        fontsize=8, color='royalblue',
+        arrowprops=dict(arrowstyle='->', color='royalblue', lw=1)
+    )
+    plt.annotate(
+            f'sindy min: {min_error_sindy:.3g}\nλ={opt_lbd_sindy:.3g}',
+            xy=(opt_lbd_sindy, min_error_sindy),
+            xytext=(15, 25), textcoords='offset points',
+            fontsize=8, color='firebrick',
+            arrowprops=dict(arrowstyle='->', color='firebrick', lw=1)
+        )
+    plt.plot(lbds, zeta_pin)
+    plt.plot(opt_lbd_pin, min_error_pin, marker='o', markersize=5, color="royalblue")
+    plt.xlabel('λ values')
 
-    axs[1].plot(lbds, zeta_pin)
-    axs[1].plot(opt_lbd_pin, min_error_pin, marker='o', markersize=12)
-    axs[1].set_xlabel('lambda values')
-    axs[1].set_xscale('log')
-    axs[1].set_ylabel('normalized pin-sindy coefficient error.')
-    axs[1].set_title(f'optimal lambda value is: {opt_lbd_pin} with minimal error {min_error_pin}.')
 
     plt.show()
 
@@ -340,12 +345,12 @@ if plot_model:
     zp = sol_pin[0]*np.cos(sol_pin[1])
 
 
-    ax0.plot(xs, ys, zs, label="SINDy model")
-    ax0.plot(x, y, z, label="actual", linestyle="dashed")
+    ax0.plot(xs, ys, zs, label="SINDy model", color="lightcoral")
+    ax0.plot(x, y, z, label="actual", linestyle="dashed", color="black")
     ax0.legend()
 
-    ax1.plot(xp, yp, zp, label="PIN-SINDy model")
-    ax1.plot(x, y, z, label="actual", linestyle="dashed")
+    ax1.plot(xp, yp, zp, label="PIN-SINDy model", color="lightskyblue")
+    ax1.plot(x, y, z, label="actual", linestyle="dashed", color="black")
     ax1.legend()
     plt.tight_layout()
     plt.show()
@@ -359,33 +364,32 @@ if plot_error:
     thetap_error = abs((sol_pin[1] - X[1]) / X[1])
     phip_error = abs((sol_pin[2] - X[2]) / X[2])
 
-    fig, axs = plt.subplots(3, 2)
+    fig = plt.figure()
+    axs = GridSpec(3, 1)
+    axs_x = fig.add_subplot(axs[0, 0])
+    axs_z = fig.add_subplot(axs[1, 0], sharex=axs_x)
+    axs_y = fig.add_subplot(axs[2, 0], sharex=axs_x)
 
-    axs[0, 0].plot(t, rs_error)
-    axs[0, 0].set_ylabel("sindy r error")
 
-    axs[1, 0].plot(t, thetas_error)
-    axs[1, 0].set_ylabel("sindy theta error")
+    axs_x.plot(t, rs_error, label="sindy", color="lightcoral")
+    axs_x.plot(t, rp_error, label="pin-sindy", color="lightskyblue")
+    axs_x.set_ylabel('r error')
 
-    axs[2, 0].plot(t, phis_error)
-    axs[2, 0].set_ylabel("sindy phi  error")
-    axs[2, 0].set_xlabel("t (sec)")
+    axs_y.plot(t, thetas_error, label="sindy", color="lightcoral")
+    axs_y.plot(t, thetap_error, label="pin-sindy", color="lightskyblue")
+    axs_y.set_ylabel('theta error')
 
-    axs[0, 1].plot(t, rp_error)
-    axs[0, 1].set_ylabel("pin-sindy r error")
 
-    axs[1, 1].plot(t, thetap_error)
-    axs[1, 1].set_ylabel("pin-sindy theta error")
-
-    axs[2, 1].plot(t, phip_error)
-    axs[2, 1].set_ylabel("pin-sindy phi error")
-    axs[2, 1].set_xlabel("t (sec)")
+    axs_z.plot(t, phis_error, label='sindy', color="lightcoral")
+    axs_z.plot(t, phip_error, label="pin-sindy", color="lightskyblue")
+    axs_z.set_ylabel('phi error')
 
     plt.tight_layout()
+    plt.legend()
     plt.show()
 
 if opt_lbd_sim == True:
-    lbds = np.logspace(-3, 1, 50)
+    lbds = np.logspace(-3, 0, 50)
     lbds = list(lbds)
     lbds_copy = lbds.copy()
     zeta_sindy = []
@@ -465,19 +469,29 @@ if opt_lbd_sim == True:
     zeta_sindy = np.array(zeta_sindy)
     zeta_pin = np.array(zeta_pin)
 
-    fix, axs = plt.subplots(2, 1)
-    axs[0].plot(lbds_copy, zeta_sindy)
-    axs[0].plot(opt_lbd_sindy, min_error_sindy, marker='o', markersize=12)
-    axs[0].set_xscale('log')
-    axs[0].set_ylabel('average sindy model error.')
-    axs[0].set_title(f'optimal lambda value is: {opt_lbd_sindy} with minimal error {min_error_sindy}.')
+    plt.plot(lbds_copy, zeta_sindy, color="lightcoral")
+    plt.plot(opt_lbd_sindy, min_error_sindy, marker='o', markersize=5, color="firebrick")
+    plt.xscale('log')
+    plt.ylabel('average model error.')
 
-    axs[1].plot(lbds_copy, zeta_pin)
-    axs[1].plot(opt_lbd_pin, min_error_pin, marker='o', markersize=12)
-    axs[1].set_xlabel('lambda values')
-    axs[1].set_xscale('log')
-    axs[1].set_ylabel('average pin-sindy model error.')
-    axs[1].set_title(f'optimal lambda value is: {opt_lbd_pin} with minimal error {min_error_pin}.')
+    plt.plot(lbds_copy, zeta_pin, color="lightskyblue")
+    plt.plot(opt_lbd_pin, min_error_pin, marker='o', markersize=5, color="royalblue")
+    plt.xlabel('lambda values')
+
+    plt.annotate(
+            f'pin min: {min_error_pin:.3g}\nλ={opt_lbd_pin:.3g}',
+            xy=(opt_lbd_pin, min_error_pin),
+            xytext=(-100, 25), textcoords='offset points',
+            fontsize=8, color='royalblue',
+            arrowprops=dict(arrowstyle='->', color='royalblue', lw=1)
+        )
+    plt.annotate(
+                f'sindy min: {min_error_sindy:.3g}\nλ={opt_lbd_sindy:.3g}',
+                xy=(opt_lbd_sindy, min_error_sindy),
+                xytext=(15, 25), textcoords='offset points',
+                fontsize=8, color='firebrick',
+                arrowprops=dict(arrowstyle='->', color='firebrick', lw=1)
+            )
 
     plt.show()
 
@@ -488,3 +502,81 @@ if print_sindy_coef:
 
 if print_true_coef:
     print(f"true coefficients: {np.round(true_coef, 4)}")
+
+if opt_lbd_ind_coef:
+    lbds=np.logspace(-8, 1, 100)
+
+    zeta_sindy_1 = []
+    zeta_pin_1 = []
+    zeta_sindy_2 = []
+    zeta_pin_2 = []
+    zeta_sindy_3 = []
+    zeta_pin_3 = []
+
+    zeta_sindy_4 = []
+    zeta_pin_4 = []
+
+    for lbd in lbds:
+        sindy_l = SINDY(dmethod, X, t_eval=t, t_span=t_span, u0=r0, theta_instance=None, custom_lib=theta_lib,
+                            norm_optimization=True, lbd=lbd, regressor = "lstsq")
+        coef_sindy_l = sindy_l.model()['coef']
+        coef_pin_l = sindy_l.model(fi)['coef']
+
+
+        zeta_sindy_1.append(abs((coef_sindy_l[0,2] - true_coef[0,2])/coef_sindy_l[0,2]))
+        zeta_pin_1.append(abs((coef_pin_l[0,2] - true_coef[0,2])/coef_pin_l[0,2]))
+
+        zeta_sindy_2.append(abs((coef_sindy_l[0, 3] - true_coef[0,3])/coef_sindy_l[0, 3]))
+        zeta_pin_2.append(abs((coef_pin_l[0, 3] - true_coef[0,3])/coef_pin_l[0, 3]))
+
+        zeta_sindy_3.append(abs((coef_sindy_l[0, 4] - true_coef[0,4])/coef_sindy_l[0,4]))
+        zeta_pin_3.append(abs((coef_pin_l[0,4] - true_coef[0,4])/coef_pin_l[0,4]))
+
+        zeta_sindy_4.append(abs((coef_sindy_l[1,7] - true_coef[1,7])/coef_sindy_l[1,7]))
+        zeta_pin_4.append(abs((coef_pin_l[1,7] - true_coef[1,7])/coef_pin_l[1,7]))
+
+    ## helper function for graphing
+    fix, axs = plt.subplots(4)
+
+    def plot_coef_error(zeta_sindy, zeta_pin, coef_name, axis, axes):
+        zeta_sindy = np.array(zeta_sindy)
+        zeta_pin = np.array(zeta_pin)
+        label_s = 'sindy'
+        label_p = 'pin'
+
+        index_sindy = np.argmin(zeta_sindy)
+        index_pin = np.argmin(zeta_pin)
+
+        axes[axis].plot(lbds, zeta_sindy, color='lightcoral', label=label_s)
+        axes[axis].plot(lbds, zeta_pin, color='lightskyblue', label=label_p)
+        axes[axis].plot(lbds[index_sindy], zeta_sindy[index_sindy], color='firebrick', marker='o', markersize=5)
+        axs[axis].plot(lbds[index_pin], zeta_pin[index_pin], color='royalblue', marker='o', markersize=5)
+        axes[axis].set_xscale('log')
+        axes[axis].set_xlabel('λ values')
+        axes[axis].set_ylabel(f'coef error for coef: {coef_name}')
+
+        axes[axis].annotate(
+            f'sindy min: {zeta_sindy[index_sindy]:.3g}\nλ={lbds[index_sindy]:.3g}',
+            xy=(lbds[index_sindy], zeta_sindy[index_sindy]),       # point being annotated
+            xytext=(15, 15), textcoords='offset points',              # offset of text box
+            fontsize=8, color='firebrick',
+            arrowprops=dict(arrowstyle='->', color='firebrick', lw=1)
+        )
+
+    # annotate pin-sindy minimum
+        axes[axis].annotate(
+                f'pin min: {zeta_pin[index_pin]:.3g}\nλ={lbds[index_pin]:.3g}',
+                xy=(lbds[index_pin], zeta_pin[index_pin]),
+                xytext=(15, -25), textcoords='offset points',
+                fontsize=8, color='royalblue',
+                arrowprops=dict(arrowstyle='->', color='royalblue', lw=1)
+            )
+
+    plot_coef_error(zeta_sindy_1, zeta_pin_1, 'dr/dt 1/r^2', 0, axs)
+    plot_coef_error(zeta_sindy_2, zeta_pin_2, 'dr/dt cos^2(theta)/r^4', 1, axs)
+    plot_coef_error(zeta_sindy_3, zeta_sindy_3, 'dr/dt 1/r^4', 2, axs)
+    plot_coef_error(zeta_sindy_4, zeta_pin_4, 'dtheta/dt sin(theta)cos(theta)/r^5', 3, axs)
+
+    plt.legend()
+    plt.tight_layout()
+    plt.show()

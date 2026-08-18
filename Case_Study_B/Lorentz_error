@@ -3,8 +3,9 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from SINDyPySource import SINDY, theta, dmethods
+from PIN_SINDy.Case_Study_C.SINDyPySource import SINDY, theta, dmethods
 
+coef_error_each = True
 
 def true_equation(t, X):
     # define constants:
@@ -58,13 +59,13 @@ dmethod = dmethods(X, t)
 theta_instance = theta(X, 2)
 
 #generate results:
-lbd_space = np.logspace(-7, 0, 50)
+lbd_space = np.logspace(-8, 1, 100)
 zetaPIN = []
 pin_error = np.inf
 opt_lbd_pin = 0
 
 for lbd in lbd_space:
-    sindy_pin = SINDY(dmethod, X, t, t_span, y0, theta_instance=theta_instance, lbd=lbd, regressor="lstsq")
+    sindy_pin = SINDY(dmethod, X, t, t_span, y0, theta_instance=theta_instance, lbd=lbd, regressor="lstsq", norm_optimization=True)
     model_pin = sindy_pin.model(fi)
     sol_pin = sindy_pin.simulate(fi)
     sindy_coef_pin = sindy_pin.get_coef()
@@ -99,16 +100,113 @@ for lbd in lbd_space:
 
 zetaSINDY = np.array(zetaSINDY)
 
-plt.plot(lbd_space, zetaSINDY, label='SINDy error')
-plt.plot(lbd_space, zetaPIN, label='PIN-SINDy error')
-plt.plot(opt_lbd_pin, pin_error, marker='o', markersize=12, label="optimal pin-sindy lambda")
-plt.plot(opt_lbd_sindy, sindy_error, marker='o', markersize=12, label="optimal pure sindy lambda")
+plt.rcParams["font.family"] = "serif"
+
+plt.plot(lbd_space, zetaSINDY, label='SINDy error', color='lightcoral')
+plt.plot(lbd_space, zetaPIN, label='PIN-SINDy error', color='lightskyblue')
+plt.plot(opt_lbd_pin, pin_error, marker='o', markersize=5, color='royalblue')
+plt.plot(opt_lbd_sindy, sindy_error, marker='o', markersize=5, color='firebrick')
 plt.xscale("log")
 plt.xlabel('lambda values')
-plt.ylabel('coefficient error (scaled)')
-plt.title(f'Lorentz System Error. minimum pin-sindy error: {pin_error}. minimum pure sindy error: {sindy_error}.')
+plt.ylabel('coefficient error')
+plt.annotate(
+        f'pin min: {pin_error:.3g}\nλ={opt_lbd_pin:.3g}',
+        xy=(opt_lbd_pin, pin_error),
+        xytext=(15, 25), textcoords='offset points',
+        fontsize=8, color='royalblue',
+        arrowprops=dict(arrowstyle='->', color='royalblue', lw=1)
+    )
+
+plt.annotate(
+        f'sindy min: {sindy_error:.3g}\nλ={opt_lbd_sindy:.3g}',
+        xy=(opt_lbd_sindy, sindy_error),
+        xytext=(-100, 25), textcoords='offset points',
+        fontsize=8, color='firebrick',
+        arrowprops=dict(arrowstyle='->', color='firebrick', lw=1)
+    )
+
+
+
 plt.legend()
-plt.grid()
+plt.tight_layout()
 plt.show()
 
-print(f"optimal pin lbd: {opt_lbd_pin}. optimal sindy lbd: {opt_lbd_sindy}")
+if coef_error_each:
+
+
+    zeta_sindy_x_yz = []
+    zeta_pin_x_yz = []
+    zeta_sindy_x_x2 = []
+    zeta_pin_x_x2 = []
+
+    zeta_sindy_y_z = []
+    zeta_pin_y_z = []
+
+    zeta_sindy_z_y = []
+    zeta_pin_z_y = []
+
+    lbds = np.logspace(-8, -1, 100)
+
+    for lbd in lbds:
+        sindy_l = SINDY(dmethod, X, t_eval=t, t_span=t_span, u0=y0, theta_instance=theta_instance,
+                        norm_optimization=True, lbd=lbd, regressor = "lstsq")
+        coef_sindy_l = sindy_l.model()['coef']
+        coef_pin_l = sindy_l.model(fi)['coef']
+
+        zeta_sindy_x_x2.append(abs((coef_sindy_l[0,7] - true_coef[0,7])/coef_sindy_l[0,7]))
+        zeta_pin_x_x2.append(abs((coef_pin_l[0,7] - true_coef[0,7])/coef_pin_l[0,7]))
+
+        zeta_sindy_x_yz.append(abs((coef_sindy_l[0, 3] - true_coef[0,3])/coef_sindy_l[0, 3]))
+        zeta_pin_x_yz.append(abs((coef_pin_l[0, 3] - true_coef[0,3])/coef_pin_l[0, 3]))
+
+        zeta_sindy_y_z.append(abs((coef_sindy_l[1, 2] - true_coef[1,2])/coef_sindy_l[1,2]))
+        zeta_pin_y_z.append(abs((coef_pin_l[1,2] - true_coef[1,2])/coef_pin_l[1,2]))
+
+        zeta_sindy_z_y.append(abs((coef_sindy_l[2,1] - true_coef[2,1])/coef_sindy_l[2,1]))
+        zeta_pin_z_y.append(abs((coef_pin_l[2,1] - true_coef[2,1])/coef_pin_l[2,1]))
+
+    ## helper function for graphing
+    fix, axs = plt.subplots(4)
+
+    def plot_coef_error(zeta_sindy, zeta_pin, coef_name, axis, axes):
+        zeta_sindy = np.array(zeta_sindy)
+        zeta_pin = np.array(zeta_pin)
+        label_s = 'sindy'
+        label_p = 'pin'
+
+        index_sindy = np.argmin(zeta_sindy)
+        index_pin = np.argmin(zeta_pin)
+
+        axes[axis].plot(lbds, zeta_sindy, color='lightcoral', label=label_s)
+        axes[axis].plot(lbds, zeta_pin, color='lightskyblue', label=label_p)
+        axes[axis].plot(lbds[index_sindy], zeta_sindy[index_sindy], color='firebrick', marker='o', markersize=5)
+        axs[axis].plot(lbds[index_pin], zeta_pin[index_pin], color='royalblue', marker='o', markersize=5)
+        axes[axis].set_xscale('log')
+        axes[axis].set_xlabel('λ values')
+        axes[axis].set_ylabel(f'coef error for coef: {coef_name}')
+
+        axes[axis].annotate(
+    f'sindy min: {zeta_sindy[index_sindy]:.3g}\nλ={lbds[index_sindy]:.3g}',
+    xy=(lbds[index_sindy], zeta_sindy[index_sindy]),       # point being annotated
+    xytext=(15, 15), textcoords='offset points',              # offset of text box
+    fontsize=8, color='firebrick',
+    arrowprops=dict(arrowstyle='->', color='firebrick', lw=1)
+)
+
+# annotate pin-sindy minimum
+        axes[axis].annotate(
+    f'pin min: {zeta_pin[index_pin]:.3g}\nλ={lbds[index_pin]:.3g}',
+    xy=(lbds[index_pin], zeta_pin[index_pin]),
+    xytext=(15, -25), textcoords='offset points',
+    fontsize=8, color='royalblue',
+    arrowprops=dict(arrowstyle='->', color='royalblue', lw=1)
+)
+
+    plot_coef_error(zeta_sindy_x_x2, zeta_pin_x_x2, 'dx/dt x^2', 0, axs)
+    plot_coef_error(zeta_sindy_x_yz, zeta_pin_x_yz, 'dx/dt yz', 1, axs)
+    plot_coef_error(zeta_sindy_y_z, zeta_sindy_y_z, 'dy/dt z', 2, axs)
+    plot_coef_error(zeta_sindy_z_y, zeta_pin_z_y, 'dz/dt y', 3, axs)
+
+    plt.legend()
+    plt.tight_layout()
+    plt.show()

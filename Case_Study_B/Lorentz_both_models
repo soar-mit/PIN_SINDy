@@ -3,12 +3,12 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from SINDyPySource import SINDY, theta, dmethods
+from PIN_SINDy.Case_Study_C.SINDyPySource import SINDY, theta, dmethods
 
 #choose which output you would like to see:
-plot_results = True
-plot_error = True
-plot_true_vs_prior = False
+plot_results = False
+plot_error = False
+plot_true_vs_prior = True
 X0 = (1, 1, 1) # initial conditions that the model will use - NOT be trained on.
 
 # generate training data
@@ -70,21 +70,21 @@ if plot_true_vs_prior:
     axs_z = fig.add_subplot(axs[2, 1], sharex=axs_x)
     axs0 = fig.add_subplot(axs[:, 0], projection='3d')
 
-    axs_x.plot(t, x)
-    axs_x.plot(t, xp)
+    axs_x.plot(t, x, color='khaki')
+    axs_x.plot(t, xp, color='thistle')
     axs_x.set_ylabel('x')
 
-    axs_y.plot(t, y)
-    axs_y.plot(t, yp)
+    axs_y.plot(t, y, color='khaki')
+    axs_y.plot(t, yp, color='thistle')
     axs_y.set_ylabel('y')
 
-    axs_z.plot(t, z)
-    axs_z.plot(t, zp)
+    axs_z.plot(t, z, color='khaki')
+    axs_z.plot(t, zp, color='thistle')
     axs_z.set_ylabel('z')
     axs_z.set_xlabel('t')
 
-    axs0.plot(x, y, z, label="true")
-    axs0.plot(xp, yp, zp, label="prior")
+    axs0.plot(x, y, z, label="true", color='khaki')
+    axs0.plot(xp, yp, zp, label="prior", color='thistle')
 
     fig.legend()
     plt.show()
@@ -93,17 +93,17 @@ if plot_true_vs_prior:
 ######## generate PIN-SINDy model
 dmethod = dmethods(X, t)
 theta_instance = theta(X, 2)
-lbd_p = .0268
+lbd_p = .0272
 sindy_p = SINDY(dmethod, X, t, t_span, y0, theta_instance=theta_instance,
-                lbd=lbd_p, regressor="lstsq")
+                lbd=lbd_p, regressor="lstsq", norm_optimization=True)
 
 model_p = sindy_p.model(fi)
 sol_p = sindy_p.simulate(fi)
 sol_px, sol_py, sol_pz = sol_p.y
 
 ######## generate SINDy model
-lbd_s = .0268
-sindy_s = SINDY(dmethod, X, t, t_span, y0, theta_instance=theta_instance, lbd=lbd_s, regressor="lstsq")
+lbd_s = .0272
+sindy_s = SINDY(dmethod, X, t, t_span, y0, theta_instance=theta_instance, lbd=lbd_s, regressor="lstsq", norm_optimization=True)
 
 model_s = sindy_s.model()
 sol_s = sindy_s.simulate()
@@ -112,7 +112,7 @@ sol_sx, sol_sy, sol_sz = sol_s.y
 ######### graph results
 if plot_results:
     if X0 != y0:
-        x, y, z = integrate.solve_ivp(true_equation, t_span, X0, 'LSODA', t_eval=t).y
+        x, y, z = integrate.solve_ivp(true_equation, t_span, X0, t_eval=t).y
 
     fig = plt.figure()
     axs = GridSpec(3, 2, width_ratios=[1, 1])
@@ -121,22 +121,21 @@ if plot_results:
     axs3 = fig.add_subplot(axs[2, 1], sharex=axs1)
     axs0 = fig.add_subplot(axs[:, 0], projection='3d')
 
-    axs0.plot(sol_sx, sol_sy, sol_sz, label="SINDy model")
-    axs0.plot(sol_px, sol_py, sol_pz, label="PIN-SINDy model")
-    axs0.plot(x, y, z, label="actual")
+    axs0.plot(sol_sx, sol_sy, sol_sz, label="SINDy model", color="lightcoral")
+    axs0.plot(sol_px, sol_py, sol_pz, label="PIN-SINDy model", color="lightskyblue")
+    axs0.plot(x, y, z, label="actual", color="black", linestyle="dashed")
 
-    axs1.plot(t, sol_sx, label="SINDy x")
-    axs1.plot(t, sol_px, label="PIN-SINDy x")
-    axs1.plot(t, x, label='x data', linestyle='dashed')
+    axs1.plot(t, sol_sx, label="SINDy x", color="lightcoral")
+    axs1.plot(t, sol_px, label="PIN-SINDy x", color="lightskyblue")
+    axs1.plot(t, x, label='x data', linestyle='dashed', color="black")
 
-    axs2.plot(t, sol_sy, label="SINDy y")
-    axs2.plot(t, sol_py, label="PIN-SINDy y")
-    axs2.plot(t, y, label='y data', linestyle='dashed')
+    axs2.plot(t, sol_sy, label="SINDy y", color="lightcoral")
+    axs2.plot(t, sol_py, label="PIN-SINDy y", color="lightskyblue")
+    axs2.plot(t, y, label='y data', linestyle='dashed', color="black")
 
-    axs3.plot(t, sol_sz, label="SINDy z")
-    axs3.plot(t, sol_pz, label="PIN-SINDy z")
-    axs3.plot(t, z, label='z data', linestyle='dashed')
-    axs3.legend()
+    axs3.plot(t, sol_sz, label="SINDy z", color="lightcoral")
+    axs3.plot(t, sol_pz, label="PIN-SINDy z", color="lightskyblue")
+    axs3.plot(t, z, label='z data', linestyle='dashed', color="black")
 
     plt.suptitle(f"Lorentz Model \n Initial Conditions: {X0} \n trained with initial conditions: {y0}")
     plt.legend()
@@ -148,36 +147,26 @@ if plot_results:
 
 if plot_error:
     fig = plt.figure()
-    axs = GridSpec(3, 2, width_ratios=[1, 1])
-    axs_px = fig.add_subplot(axs[0, 1])
-    axs_py = fig.add_subplot(axs[1, 1], sharex=axs_px)
-    axs_pz = fig.add_subplot(axs[2, 1], sharex=axs_px)
+    axs = GridSpec(2, 1)
+    axs_x = fig.add_subplot(axs[0, 0])
+    axs_z = fig.add_subplot(axs[1, 0], sharex=axs_x)
 
-    axs_sx = fig.add_subplot(axs[0, 0])
-    axs_sy = fig.add_subplot(axs[1, 0], sharex=axs_sx)
-    axs_sz = fig.add_subplot(axs[2, 0], sharex=axs_sx)
 
-    axs_px.plot(t, np.abs(sol_px - X[0])/X[0])
-    axs_px.set_ylabel('PIN-SINDy x error')
+    axs_x.plot(t, np.abs(sol_px - X[0])/X[0], label="pin-sindy", color="lightskyblue")
+    axs_x.set_ylabel('PIN-SINDy x error')
 
-    axs_py.plot(t, np.abs(sol_py - X[1])/X[1])
-    axs_py.set_ylabel('PIN-SINDy y error')
 
-    axs_pz.plot(t, np.abs(sol_pz - X[2])/X[2])
-    axs_pz.set_ylabel('PIN-SINDy z error')
+    axs_z.plot(t, np.abs(sol_pz - X[2])/X[2], label='pin=sindy', color="lightskyblue")
+    axs_z.set_ylabel('PIN-SINDy z error')
 
-    axs_sx.plot(t, np.abs(sol_sx - X[0])/X[0])
-    axs_sx.set_ylabel('SINDy x error')
+    axs_x.plot(t, np.abs(sol_sx - X[0])/X[0], label="sindy", color="lightcoral")
+    axs_x.set_ylabel('SINDy x error')
 
-    axs_sy.plot(t, np.abs(sol_sy - X[1])/X[1])
-    axs_sy.set_ylabel('SINDy y error')
+    axs_z.plot(t, np.abs(sol_sz - X[2])/X[2], label="sindy", color="lightcoral")
+    axs_z.set_ylabel('SINDy z error')
 
-    axs_sz.plot(t, np.abs(sol_sz - X[2])/X[2])
-    axs_sz.set_ylabel('SINDy z error')
-
-    plt.suptitle("SINDy and PIN-SINDy Error \n Initial Conditions: {y0}")
     plt.show()
 
 print(f"true coef: {true_coef}")
-print(f"sindy coefficient error: {sindy_s.get_coef() - true_coef}")
-print(f"pin-sindy coefficients error: {sindy_p.get_coef() - true_coef}")
+print(f"sindy coefficient: {sindy_s.get_coef()}")
+print(f"pin-sindy coefficients: {sindy_p.get_coef()}")

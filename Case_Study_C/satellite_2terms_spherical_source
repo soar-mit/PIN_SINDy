@@ -8,18 +8,18 @@ from matplotlib.gridspec import GridSpec
 # Goal: to find the density constant and synthetic atmospheric density constant in a
 #  hypothetical satellite orbit using SINDy and PIN-SINDy.
 #step 0: determine which output you would like to see.
-plot_true_vs_prior = False
+plot_true_vs_prior = True
 print_true_coef = True
 opt_lbd_coef = True
-plot_error = True
+plot_error = False
 plot_model = True
-opt_lbd_sim = True
+opt_lbd_sim = False
 print_sindy_coef = True
 print_pin_coef = True
 opt_lbd_ind_coef = True
 
 num_orbits = 4
-points_per_orbit = 6
+points_per_orbit = 12
 
 #step 1: define true and prior equation  ## using km instead of m.
 G = 6.6743e-11 ## e-11
@@ -124,7 +124,7 @@ fi[2, 8] = -2
 fi[2, 9] = -2
 
 dmethod = dmethods(X[0:3], t)
-sindy = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.0204,
+sindy = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.5,
               norm_optimization=True, derivative="second derivative second order", regressor="lstsq")
 sindy_pin = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1,
                   norm_optimization=True, derivative="second derivative second order", regressor="lstsq")
@@ -553,7 +553,7 @@ if opt_lbd_ind_coef:
         axs[axis].plot(lbds[index_pin], zeta_pin[index_pin], color='royalblue', marker='o', markersize=5)
         axes[axis].set_xscale('log')
         axes[axis].set_xlabel('λ values')
-        axes[axis].set_ylabel(f'coef error for coef: {coef_name}')
+        axes[axis].set_ylabel(f'{coef_name}')
 
         axes[axis].annotate(
             f'sindy min: {zeta_sindy[index_sindy]:.3g}\nλ={lbds[index_sindy]:.3g}',

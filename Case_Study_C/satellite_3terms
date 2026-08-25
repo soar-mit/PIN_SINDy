@@ -7,7 +7,7 @@ from matplotlib.gridspec import GridSpec
 #  hypothetical satellite orbit using SINDy and PIN-SINDy.
 # experiment: have SINDy try to make the other term, and have it already given the other term and have to find the coefficient.
 ## step 0: define output
-plot_true_vs_prior = True
+plot_true_vs_prior = False
 plot_results = True
 plot_opt_lbd= True
 
@@ -15,7 +15,7 @@ M = 5.972e24 # mass of earth
 m = 7e2  #mass of satellite
 Cd = 2.2 # drag coefficient
 A = 14.5*1.59 # cross sectional area
-G = 6.6743e-11 # gravitational constant
+G = 6.674e-11 # gravitational constant
 R = 6.371e6 # radius of earth
 J2 = 1.08263e-3 # perturbation coefficient
 rho0 = 1.225 # atmospheric density coefficient
@@ -23,6 +23,7 @@ H = 5000 # height scale
 r0 = 7e6
 theta0 = np.deg2rad(60)
 omega_E = np.array([0, 0, 7.2921e-5])
+rho = rho0*np.exp(-(r0-R)/H)
 
 #step 1: define true and prior equation
 
@@ -32,25 +33,22 @@ def orbital_equation(t, X):
     r = np.array([X[0], X[1], X[2]])
     rmag = (X[0]**2 + X[1]**2 + X[2]**2)**(1/2)
     Vrel = V - np.cross(omega_E, r)
-    Vrel_mag = (Vrel[0]**2 + Vrel[1]**2 + Vrel[2]**2)**(1/2)
+    Vmag = (Vrel[0]**2 + Vrel[1]**2 + Vrel[2]**2)**(1/2)
 
-    if rmag < R:
-        raise ValueError("Satellite went inside earth.")
-
-    adrag = -(0.5 * Cd * A / m) * rho0 * Vrel_mag * Vrel
+    adrag = -(0.5 * Cd * A / m) * rho0 * Vmag * Vrel
 
     ddx = (-M*G*X[0] / rmag**3
-    +(3*G*M*R**2*J2*X[0])*(5*X[2]/(rmag**2) - 1)/(2*rmag**5)
-    + adrag[0]*np.exp(-(rmag-R)/H) )
+    +(3*G*M*R**2*J2*X[0])*(5*X[2]**2/(rmag**2) - 1)/(2*rmag**5)
+    + adrag[0])
     ddy = (-M*G*X[1] / rmag**3
-    +(3*G*M*R**2*J2*X[1])*(5*X[2]/rmag**2 - 1)/(2*rmag**5)
-    + adrag[1]*np.exp(-(rmag - R)/H) )
+    +(3*G*M*R**2*J2*X[1])*(5*X[2]**2/rmag**2 - 1)/(2*rmag**5)
+    + adrag[1])
     ddz = (-M*G*X[2] / rmag**3
-    +(3*G*M*R**2*J2*X[2])*(5*X[2]/rmag**2 - 3)/(2*rmag**5)
-    + adrag[2] )
+    +(3*G*M*R**2*J2*X[2])*(5*X[2]**2/rmag**2 - 3)/(2*rmag**5)
+    + adrag[2])
 
     return [X[3], X[4], X[5], ddx, ddy, ddz]
-
+# missing np.exp(-(rmag-R)/H)
 
 v0 = np.sqrt(G*M/r0)
 
@@ -59,10 +57,10 @@ X0 = (r0*np.cos(theta0), r0*np.sin(theta0), 0,
 
 #calculate period:
 T = 2*np.pi*(r0**3 / (G*M))**(1/2)
-t_span = (0, int(T)+100)
-t = np.linspace(t_span[0], t_span[1], int(2*T))
+t_span = (0, int(T))
+t = np.linspace(t_span[0], t_span[1], int(10*T))
 
-x, y, z, dx, dy, dz = integrate.solve_ivp(orbital_equation, t_span, X0, method='LSODA', t_eval=t).y
+x, y, z, dx, dy, dz = integrate.solve_ivp(orbital_equation, t_span, X0, t_eval=t).y
 X = np.array([x, y, z, dx, dy, dz])
 
 if plot_true_vs_prior:
@@ -70,19 +68,19 @@ if plot_true_vs_prior:
         rmag = (X[0]**2 + X[1]**2 + X[2]**2)**(1/2)
 
         ddx = (-M*G*X[0] / rmag**3
-        +(3*G*M*R**2*J2*X[0])*(X[0]**2 + X[1]**2 -4*X[2]**2)/(2*rmag**7))+(3*G*M*R**2*J2*X[0])*(5*X[2]/(rmag**2) - 1)/(2*rmag**5)
+        +(3*G*M*R**2*J2*X[0])*(X[0]**2 + X[1]**2 -4*X[2]**2)/(2*rmag**7))
 
         ddy = (-M*G*X[1] / rmag**3
-        +(3*G*M*R**2*J2*X[1])*(X[0]**2 + X[1]**2 -4*X[2]**2)/(2*rmag**7) )+(3*G*M*R**2*J2*X[1])*(5*X[2]/rmag**2 - 1)/(2*rmag**5)
+        +(3*G*M*R**2*J2*X[1])*(X[0]**2 + X[1]**2 -4*X[2]**2)/(2*rmag**7) )
 
         ddz = (-M*G*X[2] / rmag**3
-        +(3*G*M*R**2*J2*X[2])*(X[0]**2 + X[1]**2 -4*X[2]**2)/(2*rmag**7) )+(3*G*M*R**2*J2*X[2])*(5*X[2]/rmag**2 - 3)/(2*rmag**5)
+        +(3*G*M*R**2*J2*X[2])*(X[0]**2 + X[1]**2 -4*X[2]**2)/(2*rmag**7) )
 
         return [X[3], X[4], X[5], ddx, ddy, ddz]
 
 
 
-    Xprior = integrate.solve_ivp(prior_equation, t_span, X0, method="LSODA", t_eval=t).y
+    Xprior = integrate.solve_ivp(prior_equation, t_span, X0, t_eval=t).y
 
     fig = plt.figure()
     axs = GridSpec(3, 2, width_ratios=[1, 1])
@@ -111,6 +109,36 @@ if plot_true_vs_prior:
     plt.show()
 
 #Step 3: Create PIN-SINDy model
+r = np.linalg.norm(X[:3], axis=0)
+theta_3r = theta(X[0:3]/r**3, 3)
+theta_5r = theta(X[0:3]/r**5, 3)
+theta_7r = theta(X[0:3]/r**7, 3)
+theta_0 = theta(X, 1)
+
+theta_lib = np.concatenate([theta_0.library(), theta_3r.library(), theta_5r.library(), theta_7r.library()])
+
+true_coef = np.zeros_like(theta_lib)
+true_coef[0,1] = - Cd*A*rho/(2*m)
+true_coef[0,3] = - Cd*A*rho*omega_E[2]/(2*m)
+true_coef[0,6] = -G*M
+true_coef[0,26] = -3*G*M*R**2*J2/2
+true_coef[0,59] = 15*G*M*R**2*J2/2
+
+true_coef[1,0] = Cd*A*rho/(2*m)
+true_coef[1,4] = - Cd*A*rho*omega_E[2]/(2*m)
+true_coef[1,7] = -G*M
+true_coef[1,27] = -3*G*M*R**2*J2/2
+true_coef[1,62] = 15*G*M*R**2*J2/2
+
+true_coef[2,5] = - Cd*A*rho/(2*m)
+true_coef[2,7] = -G*M
+true_coef[2,28] = -9*G*M*R**2*J2/2
+true_coef[2,63] = 15*G*M*R**2*J2/2
+
+print(true_coef)
+
+
+
 
 
 #Step 4: Compare coefficients

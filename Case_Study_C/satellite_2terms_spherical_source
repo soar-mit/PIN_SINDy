@@ -22,11 +22,11 @@ num_orbits = 4
 points_per_orbit = 12
 
 #step 1: define true and prior equation  ## using km instead of m.
-G = 6.6743e-11 ## e-11
-M = 1/G
-R = 1
+G = 6.6743e-11
+M =  5.972e24
+R = 6.371e6
 J2 = 1.08e-3 # perturbation coefficient
-r0 = 1.5
+r0 = 7e6
 
 
 def orbital_equation(t, X):

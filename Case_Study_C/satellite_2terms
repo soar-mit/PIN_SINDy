@@ -1,4 +1,4 @@
-from Case_Study_A.Python.SINDyPySource import SINDY, theta, dmethods
+from SINDyPySource import SINDY, theta, dmethods
 from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
@@ -17,32 +17,32 @@ plot_opt_lbd = False
 plot_error = False
 plot_coef_percent = False
 
+# Step 0: define constants. Use Scaling.
+M = 5.972e24 # mass of earth
+G = 6.6743e-11 # gravitational constant
+R = 6.371e6 # radius of earth
+J2 = 1.08263e-3 # perturbation coefficient
+
+coef1 = -2/(3*R**2*J2)
+coef2 = 1
+
 #step 1: define true and prior equation
 
 def orbital_equation(t, X):
     # X = [x, y, z, dxdt, dydt, dzdt]
-    M = 5.972e24 # mass of earth
-    G = 1/M #6.6743e-11 # gravitational constant
-    R = 1 #6.371e6 # radius of earth
-    J2 = 1.08263e0 # perturbation coefficient
-    omega_E = np.array([0, 0, 7.2921e-5])
-    V = np.array([X[3], X[4], X[5]])
     r = np.array([X[0], X[1], X[2]])
     rmag = np.linalg.norm(X[:3], axis=0)
     # if rmag < R:
         # raise ValueError("Satellite went inside earth.")
-    Vrel = V - np.cross(omega_E, r)
-    Vrel_mag = (Vrel[0]**2 + Vrel[1]**2 + Vrel[2]**2)**(1/2)
 
+    ddx = (coef1*(X[0] / rmag**3)
+    + (coef2*X[0])*(5*X[2]**2/(rmag**2) - 1)/(rmag**5) )
 
-    ddx = (-M*G*X[0] / rmag**3
-    + (3*G*M*R**2*J2*X[0])*(5*X[2]**2/(rmag**2) - 1)/(2*rmag**5) )
+    ddy = (coef1*X[1] / rmag**3
+    + (coef2*X[1])*(5*X[2]**2/(rmag**2) - 1)/(rmag**5) )
 
-    ddy = (-M*G*X[1] / rmag**3
-    + (3*G*M*R**2*J2*X[1])*(5*X[2]**2/(rmag**2) - 1)/(2*rmag**5) )
-
-    ddz = (-M*G*X[2] / rmag**3
-    + (3*G*M*R**2*J2*X[2])*(5*X[2]**2/(rmag**2) - 3)/(2*rmag**5) )
+    ddz = (coef1*X[2] / rmag**3
+    + (coef2*X[2])*(5*X[2]**2/(rmag**2) - 3)/(2*rmag**5) )
 
     return [X[3], X[4], X[5], ddx, ddy, ddz]
 
@@ -51,11 +51,7 @@ def orbital_equation(t, X):
 
 # coefficients:
 
-M = 5.972e24
-G = 1/M #6.6743e-11
-R = 1 #6.371e6
-J2 = 1.08263e0
-r0 = np.array([1.5, 0, 1.5]) #[7000e3, 0, 1000e3]
+r0 = np.array([7e6, 0, 0]) #[7000e3, 0, 1000e3]
 rmag = np.linalg.norm(r0, axis=0)
 
 rhat = r0 / np.linalg.norm(r0)
@@ -71,32 +67,29 @@ X0 = [r0[0], r0[1], r0[2], v0[0], v0[1], v0[2]]
 
 #calculate period and time:
 T = 2*np.pi*(rmag**3 / (G*M))**(1/2)
-t_span = (0, 10*T)
-t = np.linspace(t_span[0], t_span[1], 30*int(T))
+t_span = (0, int(1e4))
+t = np.linspace(t_span[0], t_span[1], int(1e6))
 
-x, y, z, dx, dy, dz = integrate.solve_ivp(orbital_equation, t_span, X0, method='RK45', t_eval=t).y
+x, y, z, dx, dy, dz = integrate.solve_ivp(orbital_equation, t_span, X0, t_eval=t).y
 X = np.array([x, y, z, dx, dy, dz])
 
 if plot_true_vs_prior:
     def prior_equation(t, X):
-        M = 5.972e24
-        G = 6.6743e-11
-        R = 6.371e6 # radius of earth
 
         rmag = np.linalg.norm(X[:3], axis=0)
 
-        ddx = -G*M*X[0] / (rmag**3)
+        ddx = coef1*X[0] / (rmag**3)
 
-        ddy = -G*M*X[1] / (rmag**3)
+        ddy = coef1*X[1] / (rmag**3)
 
-        ddz = -G*M*X[2] / (rmag**3)
+        ddz = coef1*X[2] / (rmag**3)
 
 
         return [X[3], X[4], X[5], ddx, ddy, ddz]
 
 
 
-    Xprior = integrate.solve_ivp(prior_equation, t_span, X0, method="LSODA", t_eval=t).y
+    Xprior = integrate.solve_ivp(prior_equation, t_span, X0, t_eval=t).y
 
     fig = plt.figure()
     axs = GridSpec(3, 2, width_ratios=[1, 1])
@@ -105,21 +98,21 @@ if plot_true_vs_prior:
     axs_z = fig.add_subplot(axs[2, 1], sharex=axs_x)
     axs0 = fig.add_subplot(axs[:, 0], projection='3d')
 
-    axs_x.plot(t, x)
-    axs_x.plot(t, Xprior[0], linestyle="dashed")
+    axs_x.plot(t, x, color="gold")
+    axs_x.plot(t, Xprior[0], linestyle="dashed", color="darkviolet" )
     axs_x.set_ylabel('x')
 
-    axs_y.plot(t, y)
-    axs_y.plot(t, Xprior[1], linestyle="dashed")
+    axs_y.plot(t, y, color="gold")
+    axs_y.plot(t, Xprior[1], linestyle="dashed", color="darkviolet")
     axs_y.set_ylabel('y')
 
-    axs_z.plot(t, z)
-    axs_z.plot(t, Xprior[2], linestyle="dashed")
+    axs_z.plot(t, z, color="gold")
+    axs_z.plot(t, Xprior[2], linestyle="dashed", color="darkviolet")
     axs_z.set_ylabel('z')
     axs_z.set_xlabel('t')
 
-    axs0.plot(x, y, z, label="true")
-    axs0.plot(Xprior[0], Xprior[1], Xprior[2], label="prior", linestyle="dashed")
+    axs0.plot(x, y, z, label="true", color="gold")
+    axs0.plot(Xprior[0], Xprior[1], Xprior[2], label="prior", linestyle="dashed", color="darkviolet")
 
     fig.legend()
     plt.show()
@@ -136,7 +129,7 @@ theta_r3 = theta_r3.library()[:3]
 theta_r5 = np.concatenate((theta_r5.library()[0:3], theta_r5.library()[9:]))
 theta_r7 = theta_r7.library()[9:]
 
-binomial_terms = np.zeros((3, 30*int(T)))
+binomial_terms = np.zeros((3, int(1e6)))
 binomial_terms[0,:] = x*(5*z**2/rmag**2 - 1)/rmag**5
 binomial_terms[1,:] = y*(5*z**2/rmag**2 - 1)/rmag**5
 binomial_terms[2,:] = z*(5*z**2/rmag**2 - 3)/rmag**5
@@ -147,37 +140,41 @@ theta_lib = np.concatenate((theta_r3, binomial_terms))
 #true coefficients. Doesn't include xdot, ydot, zdot terms.
 true_coef = np.zeros((3,6))
 
-true_coef[0, 0] = -G*M
-true_coef[0, 3] = 3*G*M*R**2*J2/2
+true_coef[0, 0] = coef1
+true_coef[0, 3] = coef2
 # true_coef[0, 3] = -3*G*M*R**2*J2/2
 # true_coef[0, 21] = 15*G*M*R**2*J2/2
 
-true_coef[1, 1] = -G*M
-true_coef[1, 4] = 3*G*M*R**2*J2/2
+true_coef[1, 1] = coef1
+true_coef[1, 4] = coef2
 # true_coef[1, 4] = -3*G*M*R**2*J2/2
 # true_coef[1, 24] = 15*G*M*R**2*J2/2
 
-true_coef[2, 2] = -G*M
-true_coef[2, 5] = 3*G*M*R**2*J2/2
+true_coef[2, 2] = coef1
+true_coef[2, 5] = coef2
 # true_coef[2, 5] = -9*G*M*R**2*J2/2
 # true_coef[2, 25] = 15*G*M*R**2*J2/2
 
 #prior coefficient matrix fi. Doesn't include
 fi = np.zeros((3,6))
-fi[0, 0] = -G*M
-fi[1, 1] = -G*M
-fi[2, 2] = -G*M
+fi[0, 0] = coef1
+fi[1, 1] = coef1
+fi[2, 2] = coef1
 
 dmethod = dmethods(X[0:3], t)
 sindy_pin = SINDY(dmethod, X[0:3], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib,
-                  lbd=.5, norm_optimization=True,
-                  regressor="lstsq", derivative="second derivative second order")
-sindy = SINDY(dmethod, X[0:3], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=1,
+                  lbd=.00001, norm_optimization=True,
+                  regressor="lasso", derivative="second derivative second order")
+sindy = SINDY(dmethod, X[0:3], t_span=t_span, t_eval=t, u0=X0, theta_instance=None, custom_lib=theta_lib, lbd=.00001,
               norm_optimization=True,
-              regressor="lstsq", derivative="second derivative second order")
+              regressor="lasso", derivative="second derivative second order")
 
 coef_sindy = sindy.model()['coef']
 coef_pin = sindy_pin.model(fi)['coef']
+
+print("true coefficients: {true_coef}")
+print("Pure sindy coefficients: {coef_sindy}")
+print("pin-sindy coefficients:{coef_pin}")
 
 # create model and plot results
 
@@ -415,7 +412,7 @@ if plot_coef_percent:
     for i in range(len(sindy_term_error)):
         print(f"coefficient error for the library term {coef_term[i]}. SINDy term: {sindy_term[i]}. true term: {true_term[i]}. pin sindy term: {pin_term[i]}. pin sindy percent error: {pin_term_error[i]}%. sindy percent error: {sindy_term_error[i]}% ")
 
-print(f"pin coefficients: {np.round(coef_pin, 2)}")
-print(f"true coefficients: {np.round(true_coef, 2)}")
-print(f"sindy coefficients: {np.round(coef_sindy, 2)} ")
+print(f"pin coefficients: {coef_pin}")
+print(f"true coefficients: {true_coef}")
+print(f"sindy coefficients: {coef_sindy} ")
 print(f"max absolute difference: {np.max(np.abs(coef_sindy - coef_pin))}")

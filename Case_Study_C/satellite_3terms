@@ -8,8 +8,8 @@ from matplotlib.gridspec import GridSpec
 # experiment: have SINDy try to make the other term, and have it already given the other term and have to find the coefficient.
 ## step 0: define output
 plot_true_vs_prior = False
-plot_results = True
-plot_opt_lbd= True
+plot_results = False
+plot_opt_lbd= False
 
 M = 5.972e24 # mass of earth
 m = 7e2  #mass of satellite

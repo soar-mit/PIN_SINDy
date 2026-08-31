@@ -1,0 +1,19 @@
+import numpy as np
+M = 5.972e24 # mass of earth
+m = 7e2  #mass of satellite
+Cd = 2.2 # drag coefficient
+A = 14.5*1.59 # cross sectional area
+G = 6.674e-11 # gravitational constant
+R = 6.371e6 # radius of earth
+J2 = 1.08263e-3 # perturbation coefficient
+rho0 = 1.225 # atmospheric density coefficient
+H = 8e4 # height scale
+r0 = 7e6
+theta0 = np.deg2rad(60)
+omega_E = np.array([0, 0, 7.2921e-5])
+rho = rho0*np.exp(-(r0-R)/H)
+
+print(f"two-body orbital coefficient: {-G*M:e}")
+print(f"J2 coefficient: {-G*M*R**2*J2*3/(2)}")
+print(f"drag coefficient: {-Cd*A*rho/(2*m)}")
+print(f"rho: {rho}")

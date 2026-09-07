@@ -1,4 +1,4 @@
-from SINDyPySource import SINDY, dmethods
+from Case_Study_B.SINDyPySource import SINDY, dmethods
 from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
@@ -131,6 +131,8 @@ sindy_pin = SINDY(dmethod, X[0:3], t_eval=t, t_span=t_span, u0=X0, theta_instanc
 
 coef_sindy = np.round(sindy.model()['coef'], 2)
 coef_pin = np.round(sindy_pin.model(fi)['coef'], 2)
+print(coef_pin.shape)
+print(theta_lib.shape)
 
 print("step 4 complete.")
 

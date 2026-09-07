@@ -6,6 +6,7 @@ from scipy.signal import savgol_filter
 from scipy.linalg import LinAlgWarning
 from sklearn.linear_model import ridge_regression
 import os
+from scipy.optimize import minimize
 
 class theta:
     def __init__(self, var_list, order):
@@ -212,6 +213,41 @@ class STLSQ:
         if fi is not None:
             coef = fi + coef
         return coef
+
+    def integration_method(self, fi, norm_optimization, X, R, t_steps, x0):
+        """ fi: prior coefficient matrix
+        norm_optimization: boolean, whether or not to divide by scalar norm.
+        X: observed function x.
+        R: amount of indices besides fi to sample.
+        t_steps: time stamps that X has been taken in."""
+
+        # create empty coef matrix
+        state_var, time_stamps = X.shape
+        potential_functions, time_stamps = self.theta_lib.shape
+        coef = np.zeros((state_var, potential_functions)) #Q: potential functions
+        # create other variables
+        S = len(np.nonzero(fi))
+
+        c_best = np.inf
+        max_iter = self.max_iter
+        num_iter = 0
+
+        if norm_optimization:
+            norm = np.linalg.norm(self.theta_lib, ord=2, axis=1)
+            norm[norm==0] = 1
+            theta_lib_scaled = self.theta_lib/norm[:,None]
+            while num_iter < max_iter:
+                if fi is None:
+                    X_star_scaled = integrate.solve_ivp(coef@theta_lib_scaled, t_span=[t_steps[0], t_steps[-1]], y0=x0, t_eval=t_steps)
+                else:
+                    X_star_scaled = integrate.solve_ivp((fi+coef)@theta_lib_scaled, [t_steps[0], t_steps[-1]], y0=x0, t_eval=t_steps)
+            if np.abs(X_star_scaled - X) < c_best:
+                c_best = np.abs(X_star_scaled - X)
+
+
+        return coef
+
+
 
 
 class SINDY:

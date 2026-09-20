@@ -3,9 +3,10 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from PIN_SINDy.Case_Study_C.SINDyPySource import SINDY, theta, dmethods
+from SINDyPySource import SINDY, theta, dmethods
 
 coef_error_each = True
+add_noise = False
 
 def true_equation(t, X):
     # define constants:
@@ -50,8 +51,14 @@ t_span = (0, 20)
 t = np.linspace(0, 20, 2000)
 y0 = (1, 1, 1)
 
-x, y, z = integrate.solve_ivp(true_equation, t_span, y0, str='LSODA', t_eval=t).y
+sol = integrate.solve_ivp(true_equation, t_span, y0, str='LSODA', t_eval=t).y
+x, y, z = sol
 X = np.array([x, y, z])
+if add_noise:
+    X = X + np.random.normal(size=sol.shape)
+    x = X[0]
+    y = X[1]
+    z = X[2]
 
 #create SINDy model
 
@@ -183,7 +190,7 @@ if coef_error_each:
         axs[axis].plot(lbds[index_pin], zeta_pin[index_pin], color='royalblue', marker='o', markersize=5)
         axes[axis].set_xscale('log')
         axes[axis].set_xlabel('λ values')
-        axes[axis].set_ylabel(f'coef error for coef: {coef_name}')
+        axes[axis].set_ylabel(f'{coef_name}')
 
         axes[axis].annotate(
     f'sindy min: {zeta_sindy[index_sindy]:.3g}\nλ={lbds[index_sindy]:.3g}',

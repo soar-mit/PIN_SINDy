@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from Case_Study_B.SINDyPySource import theta, dmethods, SINDY, STLSQ
+from SINDyPySource import theta, dmethods, SINDY, STLSQ
 import math
 
 

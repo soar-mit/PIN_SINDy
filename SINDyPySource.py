@@ -56,7 +56,7 @@ class dmethods:
         return np.gradient(var, self.dt)
 
     def forward_difference(self):
-        f = np.gradient(self.x, self.dt, axis=1)  # vectorized across all rows at once
+        f = np.gradient(self.x, self.dt)  # vectorized across all rows at once
         return np.clip(f, -1e6, 1e6)
 
     def second_differential(self, var):

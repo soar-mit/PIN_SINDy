@@ -2,7 +2,7 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from SINDyPySource import SINDY, theta, dmethods
+from Case_Study_B.SINDyPySource import SINDY, theta, dmethods
 
 # Goal: generate Pure SINDy and PIN-SINDy model for comparison. for Lotka-Volterra Equations
 true_vs_prior = False
@@ -11,8 +11,8 @@ plot_error = False
 
 # create training data:
 def true_forcing(t, x):
-    dx = .5*x[0] - .2*x[0]*x[1] - x[1]*x[0]**2
-    dy = -.3*x[1] + .4*x[0]*x[1] - x[0]*x[1]**2
+    dx = .5*x[0] - .2*x[0]*x[1] - .1*x[0]**2
+    dy = -.3*x[1] + .4*x[0]*x[1] - .1*x[1]**2
     return [dx, dy]
 
 def prior_forcing(t, x):
@@ -23,12 +23,12 @@ def prior_forcing(t, x):
 true_coef = np.zeros((2, 9))
 true_coef[0, 0] = .5
 true_coef[0, 3] = -.2
-true_coef[0, 6] = -1
+true_coef[0, 2] = -.1
 
 
 true_coef[1, 1] = -.3
 true_coef[1, 3] = .4
-true_coef[1, 7] = -1
+true_coef[1, 4] = -.1
 
 print(f'true coefficients: {true_coef}')
 
@@ -53,14 +53,14 @@ dmethod = dmethods(X, t)
 
 theta_instance = theta(X, 3)
 
-sindy_pin = SINDY(dmethod, X, t, t_span, x0, theta_instance=theta_instance, lbd=6.13e-3, regressor="lstsq", norm_optimization=True)
+sindy_pin = SINDY(dmethod, X, t, t_span, x0, theta_instance=theta_instance, lbd=1e-3, regressor="lstsq", norm_optimization=True)
 model_pin = sindy_pin.model(fi)
 print(f'pin sindy: {sindy_pin.get_coef()}')
 sol_pin = sindy_pin.simulate(fi).y
 
 #create pure SINDy object
 
-sindy_pure = SINDY(dmethod, X, t, t_span, x0, theta_instance=theta_instance, lbd=1e-5, regressor="lstsq", norm_optimization=True)
+sindy_pure = SINDY(dmethod, X, t, t_span, x0, theta_instance=theta_instance, lbd=1e-3, regressor="lstsq", norm_optimization=True)
 model_pure = sindy_pure.model()
 print(f'sindy: {sindy_pure.get_coef()}')
 sol_pure = sindy_pure.simulate().y

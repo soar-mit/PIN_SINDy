@@ -1,4 +1,4 @@
-from SINDyPySource import SINDY, theta, dmethods
+from Case_Study_B.SINDyPySource import SINDY, theta, dmethods
 from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt

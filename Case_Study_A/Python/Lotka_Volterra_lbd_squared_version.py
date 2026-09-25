@@ -2,7 +2,7 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from PIN_SINDy.Case_Study_B.SINDyPySource import SINDY, theta, dmethods
+from Case_Study_B.SINDyPySource import SINDY, theta, dmethods
 
 # Goal: generate Pure SINDy and PIN-SINDy model for comparison. for Lotka-Volterra Equations
 true_vs_prior = False
@@ -259,4 +259,20 @@ if coef_error_norm:
 
     plt.legend()
     plt.tight_layout()
+    plt.show()
+
+    idx_max_diff = np.argmax(zeta_sindy-zeta_pin)
+    plt.plot(lbds, zeta_sindy-zeta_pin, color="orchid", label = "sindy error - pin error")
+    plt.axhline(y=0, color="black")
+    plt.plot(lbds[idx_max_diff], (zeta_sindy-zeta_pin)[idx_max_diff], color="purple")
+    plt.annotate(
+        f'maximum difference between sindy and pin-sindy: {(zeta_sindy-zeta_pin)[idx_max_diff]: .3g}',
+        xy=(lbds[idx_max_diff], (zeta_sindy-zeta_pin)[idx_max_diff]),       # point being annotated
+        xytext=(15, 15), textcoords='offset points',              # offset of text box
+        fontsize=8, color='purple',
+        arrowprops=dict(arrowstyle='->', color='purple', lw=1))
+    plt.xscale('log')
+    plt.xlabel("lambda values")
+    plt.ylabel("normalized error")
+    plt.legend()
     plt.show()

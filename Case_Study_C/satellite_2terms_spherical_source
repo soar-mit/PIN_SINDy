@@ -1,4 +1,4 @@
-from SINDyPySource import SINDY, dmethods
+from Case_Study_B.SINDyPySource import SINDY, dmethods
 from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,8 +9,8 @@ from matplotlib.gridspec import GridSpec
 #  hypothetical satellite orbit using SINDy and PIN-SINDy.
 #step 0: determine which output you would like to see.
 plot_true_vs_prior = False
-print_true_coef = True
-opt_lbd_coef = False
+print_true_coef = False
+opt_lbd_coef = True
 plot_error = False
 plot_model = False
 opt_lbd_sim = False
@@ -25,7 +25,7 @@ points_per_orbit = 12
 M = 5.972e24
 G = 1/M #6.6743e-11
 R = 1 #6.371e6
-J2 = 1.08e-3 # perturbation coefficient
+J2 = 1.08e-2 # perturbation coefficient
 r0 = 1.5 #7e6
 
 
@@ -325,6 +325,21 @@ if opt_lbd_coef:
     plt.xlabel('λ values')
 
 
+    plt.show()
+
+    idx_max_diff = np.argmax(zeta_sindy-zeta_pin)
+    plt.plot(lbds, zeta_sindy-zeta_pin, color="orchid", label = "sindy error - pin error")
+    plt.axhline(y=0, color="black")
+    plt.plot(lbds[idx_max_diff], (zeta_sindy-zeta_pin)[idx_max_diff], color="purple")
+    plt.annotate(
+            f'maximum difference between sindy and pin-sindy: {(zeta_sindy-zeta_pin)[idx_max_diff]: .3g}',
+            xy=(lbds[idx_max_diff], (zeta_sindy-zeta_pin)[idx_max_diff]),       # point being annotated
+            xytext=(15, 15), textcoords='offset points',              # offset of text box
+            fontsize=8, color='purple',
+            arrowprops=dict(arrowstyle='->', color='purple', lw=1))
+    plt.xlabel("lambda values")
+    plt.ylabel("normalized error")
+    plt.legend()
     plt.show()
 
 if plot_model:

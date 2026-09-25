@@ -2,12 +2,12 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from Case_Study_B.SINDyPySource import SINDY, theta, dmethods
+from SINDyPySource import SINDY, theta, dmethods
 
 # Goal: generate Pure SINDy and PIN-SINDy model for comparison. for Lotka-Volterra Equations
 true_vs_prior = False
-coef_error_norm = True
-coef_error_each = False
+coef_error_norm = False
+coef_error_each = True
 
 # create training data:
 def true_forcing(t, x):
@@ -67,30 +67,29 @@ if true_vs_prior:
     x, y = X
     priorx, priory = prior_sol.y
 
-    axs1.plot(t, x, 'b-', label='true')
-    axs1.plot(t, priorx, 'y-', linestyle="dashed", label='prior')
-    axs1.set_ylabel("x")
-    axs1.legend()
+    axs1.plot(t, x, label='true', color="gold")
+    axs1.plot(t, priorx, 'y-', linestyle="dashed", label='prior', color="mediumorchid")
+    axs1.set_ylabel("x", fontsize=12)
+    axs1.tick_params(axis='x', bottom=False, labelbottom=False)
 
-    axs2.plot(t, y, 'b-')
-    axs2.plot(t, priory, 'y-', linestyle="dashed")
-    axs2.set_ylabel("y")
-    axs2.legend()
+    axs2.plot(t, y, color="gold")
+    axs2.plot(t, priory, linestyle="dashed", color="mediumorchid")
+    axs2.set_ylabel("y", fontsize=12)
 
 
-    fig.supxlabel("t")
+    axs2.set_xlabel("t", fontsize=12)
 
-    axs3.plot(x, y, 'b-', label="true")
-    axs3.plot(priorx, priory, 'y-', linestyle="dashed", label="prior")
-    axs3.set_ylabel("y")
-    axs3.set_xlabel("x")
-    axs3.legend()
+    axs3.plot(x, y, color="gold", label="true")
+    axs3.plot(priorx, priory, color="mediumorchid", linestyle="dashed", label="prior")
+    axs3.set_ylabel("y", fontsize=12)
+    axs3.set_xlabel("x", fontsize=12)
+    axs3.legend(fontsize=12)
 
-    plt.suptitle(f"true vs prior equations")
     plt.tight_layout()
+
     plt.show()
 
-lbds = np.logspace(-8, 1, 100)
+lbds = np.logspace(-7, -3, 100)
 
 if coef_error_each:
 
@@ -135,7 +134,7 @@ if coef_error_each:
     ## helper function for graphing
     fix, axs = plt.subplots(3)
 
-    def plot_coef_error(zeta_sindy, zeta_pin, coef_name, axis, axes):
+    def plot_coef_error(lbd_list, zeta_sindy, zeta_pin, coef_name, axis, axes):
         zeta_sindy = np.array(zeta_sindy)
         zeta_pin = np.array(zeta_pin)
         label_s = 'sindy'
@@ -144,17 +143,17 @@ if coef_error_each:
         index_sindy = np.argmin(zeta_sindy)
         index_pin = np.argmin(zeta_pin)
 
-        axes[axis].plot(lbds, zeta_sindy, color='lightcoral', label=label_s)
-        axes[axis].plot(lbds, zeta_pin, color='lightskyblue', label=label_p)
-        axes[axis].plot(lbds[index_sindy], zeta_sindy[index_sindy], color='firebrick', marker='o', markersize=5)
-        axs[axis].plot(lbds[index_pin], zeta_pin[index_pin], color='royalblue', marker='o', markersize=5)
+        axes[axis].plot(lbd_list, zeta_sindy, color='lightcoral', label=label_s)
+        axes[axis].plot(lbd_list, zeta_pin, color='lightskyblue', label=label_p)
+        axes[axis].plot(lbd_list[index_sindy], zeta_sindy[index_sindy], color='firebrick', marker='o', markersize=5)
+        axs[axis].plot(lbd_list[index_pin], zeta_pin[index_pin], color='royalblue', marker='o', markersize=5)
         axes[axis].set_xscale('log')
         axes[axis].set_xlabel('λ values')
         axes[axis].set_ylabel(f'coef error for coef: {coef_name}')
 
         axes[axis].annotate(
     f'sindy min: {zeta_sindy[index_sindy]:.3g}\nλ={lbds[index_sindy]:.3g}',
-    xy=(lbds[index_sindy], zeta_sindy[index_sindy]),       # point being annotated
+    xy=(lbd_list[index_sindy], zeta_sindy[index_sindy]),       # point being annotated
     xytext=(15, 15), textcoords='offset points',              # offset of text box
     fontsize=8, color='firebrick',
     arrowprops=dict(arrowstyle='->', color='firebrick', lw=1)
@@ -163,15 +162,15 @@ if coef_error_each:
 # annotate pin-sindy minimum
         axes[axis].annotate(
     f'pin min: {zeta_pin[index_pin]:.3g}\nλ={lbds[index_pin]:.3g}',
-    xy=(lbds[index_pin], zeta_pin[index_pin]),
-    xytext=(15, -25), textcoords='offset points',
+    xy=(lbd_list[index_pin], zeta_pin[index_pin]),
+    xytext=(-50, 15), textcoords='offset points',
     fontsize=8, color='royalblue',
     arrowprops=dict(arrowstyle='->', color='royalblue', lw=1)
 )
 
-    plot_coef_error(zeta_sindy_x, zeta_pin_x, 'x', 0, axs)
-    plot_coef_error(zeta_sindy_x_xy, zeta_pin_x_xy, 'xy', 1, axs)
-    plot_coef_error(zeta_sindy_x2, zeta_sindy_x2, 'x^2', 2, axs)
+    plot_coef_error(lbds, zeta_sindy_x, zeta_pin_x, 'x', 0, axs)
+    plot_coef_error(lbds, zeta_sindy_x_xy, zeta_pin_x_xy, 'xy', 1, axs)
+    plot_coef_error(lbds, zeta_sindy_x2, zeta_sindy_x2, 'x^2', 2, axs)
 
     plt.legend()
     plt.tight_layout()
@@ -179,9 +178,9 @@ if coef_error_each:
 
     fig, axs= plt.subplots(3)
 
-    plot_coef_error(zeta_sindy_y, zeta_pin_y, 'y', 0, axs)
-    plot_coef_error(zeta_sindy_y_xy, zeta_pin_y_xy, 'xy', 1, axs)
-    plot_coef_error(zeta_sindy_y2, zeta_pin_y2, 'y^2', 2, axs)
+    plot_coef_error(lbds, zeta_sindy_y, zeta_pin_y, 'y', 0, axs)
+    plot_coef_error(lbds, zeta_sindy_y_xy, zeta_pin_y_xy, 'xy', 1, axs)
+    plot_coef_error(lbds[90:], zeta_sindy_y2[90:], zeta_pin_y2[90:], 'y^2', 2, axs)
 
     plt.legend()
     plt.tight_layout()
@@ -234,45 +233,50 @@ if coef_error_norm:
     zeta_sindy = np.array(zeta_sindy)
     zeta_pin = np.array(zeta_pin)
 
-    plt.plot(lbds, zeta_sindy, color='lightcoral', label='sindy')
-    plt.plot(opt_lbd_sindy, min_error_sindy, marker='o', markersize=5, color='firebrick')
-    plt.xscale('log')
-    plt.xlabel('λ values')
-    plt.ylabel('normalized coefficient error')
-    plt.annotate(
+
+    plt.rcParams["font.family"] = "serif"
+    fig = plt.figure()
+    axs = GridSpec(2, 2, width_ratios=[1, 1])
+    axs1 = fig.add_subplot(axs[0,:])
+    axs2 = fig.add_subplot(axs[1,:], sharex=axs1)
+    axs1.plot(lbds, zeta_sindy, color='lightcoral', label='sindy')
+    axs1.plot(opt_lbd_sindy, min_error_sindy, marker='o', markersize=5, color='firebrick')
+    axs1.set_xscale('log')
+    axs1.set_ylabel('normalized coefficient error', fontsize=12)
+    axs1.annotate(
             f'sindy min: {min_error_sindy:.3g}\nλ={opt_lbd_sindy:.3g}',
             xy=(opt_lbd_pin, min_error_pin),
-            xytext=(15, -25), textcoords='offset points',
+            xytext=(15, 0), textcoords='offset points',
             fontsize=8, color='firebrick',
             arrowprops=dict(arrowstyle='->', color='firebrick', lw=1)
         )
 
-    plt.plot(lbds, zeta_pin, color='lightskyblue', label='pin-sindy')
-    plt.plot(opt_lbd_pin, min_error_pin, marker='o', markersize=5, color='royalblue')
-    plt.annotate(
+    axs1.plot(lbds, zeta_pin, color='lightskyblue', label='pin-sindy')
+    axs1.plot(opt_lbd_pin, min_error_pin, marker='o', markersize=5, color='royalblue')
+    axs1.annotate(
         f'pin min: {min_error_pin:.3g}\nλ={opt_lbd_pin:.3g}',
         xy=(opt_lbd_pin, min_error_pin),
         xytext=(15, 25), textcoords='offset points',
         fontsize=8, color='royalblue',
         arrowprops=dict(arrowstyle='->', color='royalblue', lw=1)
     )
+    axs1.tick_params(axis='x', bottom=False, labelbottom=False)
 
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    axs1.legend(fontsize=12)
+    fig.tight_layout()
 
     idx_max_diff = np.argmax(zeta_sindy-zeta_pin)
-    plt.plot(lbds, zeta_sindy-zeta_pin, color="orchid", label = "sindy error - pin error")
-    plt.axhline(y=0, color="black")
-    plt.plot(lbds[idx_max_diff], (zeta_sindy-zeta_pin)[idx_max_diff], color="purple")
-    plt.annotate(
+    axs2.plot(lbds, zeta_sindy-zeta_pin, color="orchid", label = "sindy error - pin error")
+    axs2.axhline(y=0, color="black", linestyle="dashed", label= "reference line: difference=0")
+    axs2.plot(lbds[idx_max_diff], (zeta_sindy-zeta_pin)[idx_max_diff], color="purple")
+    axs2.annotate(
         f'maximum difference between sindy and pin-sindy: {(zeta_sindy-zeta_pin)[idx_max_diff]: .3g}',
         xy=(lbds[idx_max_diff], (zeta_sindy-zeta_pin)[idx_max_diff]),       # point being annotated
-        xytext=(15, 15), textcoords='offset points',              # offset of text box
+        xytext=(-25, -25), textcoords='offset points',              # offset of text box
         fontsize=8, color='purple',
         arrowprops=dict(arrowstyle='->', color='purple', lw=1))
-    plt.xscale('log')
-    plt.xlabel("lambda values")
-    plt.ylabel("normalized error")
-    plt.legend()
+    axs2.set_xscale('log')
+    axs2.set_xlabel("lambda values", fontsize=12)
+    axs2.set_ylabel("normalized error", fontsize=12)
+    axs2.legend(fontsize=12)
     plt.show()

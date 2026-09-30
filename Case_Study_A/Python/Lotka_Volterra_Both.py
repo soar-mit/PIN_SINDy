@@ -2,7 +2,7 @@ from scipy import integrate
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from Case_Study_A.Python.SINDyPySource import SINDY, theta, dmethods
+from Case_Study_B.SINDyPySource import SINDY, theta, dmethods
 
 # Goal: generate Pure SINDy and PIN-SINDy model for comparison. for Lotka-Volterra Equations
 true_vs_prior = False
@@ -117,16 +117,17 @@ if plot_model:
     axs[0].plot(t, piny, color='lightskyblue')
     axs[0].plot(t, y, color='black', linestyle="dashed", label="model")
     axs[0].plot(t, x, color='black', linestyle="dashed")
-    axs[0].set_ylabel("x")
+    axs[0].set_ylabel("model")
+    axs[0].tick_params(axis='x', bottom=False, labelbottom=False)
     axs[0].legend()
 
-    axs[1].plot(t, purex, color='lightcoral', label='pure SINDy')
-    axs[1].plot(t, x, color='black', linestyle="dashed", label="model")
-    axs[1].plot(t, purey, color='lightcoral')
-    axs[1].plot(t, y, color='black', linestyle="dashed")
-    axs[1].set_ylabel("y")
-    axs[1].legend()
 
+    axs[1].plot(t, purex, color='lightcoral', label='pure SINDy')
+    axs[1].plot(t, purey, color='lightcoral')
+    axs[1].plot(t, x, color='black', linestyle="dashed", label="model")
+    axs[1].plot(t, y, color='black', linestyle="dashed")
+    axs[1].set_ylabel("model")
+    axs[1].legend()
 
     fig.supxlabel("t")
 
@@ -135,22 +136,19 @@ if plot_model:
     plt.show()
 
 if plot_error:
-
+    plt.rcParams["font.family"] = "serif"
     fig, axs = plt.subplots(2, 2)
 
     axs[0, 0].plot(t, abs(x - pinx)/x)
-    axs[0, 0].set_ylabel("pin-sindy x")
+    axs[0, 0].set_ylabel("pin-sindy x", fontsize=12)
     axs[1, 0].plot(t, abs(y-piny)/y)
-    axs[1,0].set_ylabel("pin-sindy y")
-    axs[1,0].set_xlabel("t")
-    axs[1, 0].set_title("pin-sindy model")
+    axs[1,0].set_ylabel("pin-sindy y", fontsize=12)
 
     axs[0, 1].plot(t, abs(x - purex)/x)
-    axs[0, 1].set_ylabel("pure sindy x")
+    axs[0, 1].set_ylabel("pure sindy x", fontsize=12)
     axs[1, 1].plot(t, abs(y - purey)/y)
-    axs[1, 1].set_ylabel("pure sindy y")
+    axs[1, 1].set_ylabel("pure sindy y", fontsize=12)
     axs[1, 1]. set_xlabel("t")
-    axs[0, 1].set_title("pure sindy model")
     plt.tight_layout()
     plt.show()
 

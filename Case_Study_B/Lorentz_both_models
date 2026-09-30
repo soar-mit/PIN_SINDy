@@ -7,7 +7,7 @@ from SINDyPySource import SINDY, theta, dmethods
 
 #choose which output you would like to see:
 plot_results = True
-plot_error = True
+plot_error = False
 plot_true_vs_prior = False
 add_noise = False
 X0 = (1, 1, 1) # initial conditions that the model will use - NOT be trained on.
@@ -74,23 +74,28 @@ if plot_true_vs_prior:
     axs_z = fig.add_subplot(axs[2, 1], sharex=axs_x)
     axs0 = fig.add_subplot(axs[:, 0], projection='3d')
 
-    axs_x.plot(t, x, color='khaki')
-    axs_x.plot(t, xp, color='thistle')
-    axs_x.set_ylabel('x')
+    plt.rcParams["font.family"] = "serif"
+    axs_x.plot(t, x, color='gold')
+    axs_x.plot(t, xp, color='mediumorchid')
+    axs_x.set_ylabel('x', fontsize=12)
+    axs_x.tick_params(axis='x', bottom=False, labelbottom=False)
 
-    axs_y.plot(t, y, color='khaki')
-    axs_y.plot(t, yp, color='thistle')
-    axs_y.set_ylabel('y')
+    axs_y.plot(t, y, color='gold')
+    axs_y.plot(t, yp, color='mediumorchid')
+    axs_y.set_ylabel('y', fontsize=12)
+    axs_y.tick_params(axis='x', bottom=False, labelbottom=False)
 
-    axs_z.plot(t, z, color='khaki')
-    axs_z.plot(t, zp, color='thistle')
-    axs_z.set_ylabel('z')
-    axs_z.set_xlabel('t')
+    axs_z.plot(t, z, color='gold')
+    axs_z.plot(t, zp, color='mediumorchid')
+    axs_z.set_ylabel('z', fontsize=12)
+    axs_z.set_xlabel('t',fontsize=12)
+    axs_z.tick_params(axis='x', bottom=False, labelbottom=False)
 
-    axs0.plot(x, y, z, label="true", color='khaki')
-    axs0.plot(xp, yp, zp, label="prior", color='thistle')
+    axs0.plot(x, y, z, label="true", color='gold')
+    axs0.plot(xp, yp, zp, label="prior", color='mediumorchid')
 
-    fig.legend()
+    fig.legend(fontsize=12)
+    fig.tight_layout()
     plt.show()
 
 if add_noise:
@@ -151,26 +156,27 @@ if plot_results:
     axs3 = fig.add_subplot(axs[2, 1], sharex=axs1)
     axs0 = fig.add_subplot(axs[:, 0], projection='3d')
 
+    plt.rcParams["font.family"] = "serif"
     axs0.plot(sol_sx, sol_sy, sol_sz, label="SINDy model", color="lightcoral")
     axs0.plot(sol_px, sol_py, sol_pz, label="PIN-SINDy model", color="lightskyblue")
-    axs0.plot(x, y, z, label="actual", color="black", linestyle="dashed")
+    axs0.plot(x, y, z, label="model", color="black", linestyle="dashed")
 
     axs1.plot(t, sol_sx, label="SINDy x", color="lightcoral")
     axs1.plot(t, sol_px, label="PIN-SINDy x", color="lightskyblue")
     axs1.plot(t, x, label='x data', linestyle='dashed', color="black")
+    axs1.tick_params(axis='x', bottom=False, labelbottom=False)
 
     axs2.plot(t, sol_sy, label="SINDy y", color="lightcoral")
     axs2.plot(t, sol_py, label="PIN-SINDy y", color="lightskyblue")
     axs2.plot(t, y, label='y data', linestyle='dashed', color="black")
+    axs2.tick_params(axis='x', bottom=False, labelbottom=False)
 
     axs3.plot(t, sol_sz, label="SINDy z", color="lightcoral")
     axs3.plot(t, sol_pz, label="PIN-SINDy z", color="lightskyblue")
     axs3.plot(t, z, label='z data', linestyle='dashed', color="black")
 
-    plt.suptitle(f"Lorentz Model \n Initial Conditions: {X0} \n trained with initial conditions: {y0}")
-    plt.legend()
+    plt.legend(fontsize=12)
     plt.tight_layout()
-    plt.grid()
     plt.show()
 
 ######### plot error

@@ -66,7 +66,7 @@ dmethod = dmethods(X, t)
 theta_instance = theta(X, 2)
 
 #generate results:
-lbd_space = np.logspace(-8, 1, 100)
+lbd_space = np.logspace(-2, 1, 100)
 zetaPIN = []
 pin_error = np.inf
 opt_lbd_pin = 0
@@ -109,14 +109,14 @@ zetaSINDY = np.array(zetaSINDY)
 
 plt.rcParams["font.family"] = "serif"
 
-plt.plot(lbd_space, zetaSINDY, label='SINDy error', color='lightcoral')
-plt.plot(lbd_space, zetaPIN, label='PIN-SINDy error', color='lightskyblue')
-plt.plot(opt_lbd_pin, pin_error, marker='o', markersize=5, color='royalblue')
-plt.plot(opt_lbd_sindy, sindy_error, marker='o', markersize=5, color='firebrick')
-plt.xscale("log")
-plt.xlabel('lambda values')
-plt.ylabel('coefficient error')
-plt.annotate(
+fig, axs = plt.subplots(2,1)
+axs[0].plot(lbd_space, zetaSINDY, label='SINDy error', color='lightcoral')
+axs[0].plot(lbd_space, zetaPIN, label='PIN-SINDy error', color='lightskyblue')
+axs[0].plot(opt_lbd_pin, pin_error, marker='o', markersize=5, color='royalblue')
+axs[0].plot(opt_lbd_sindy, sindy_error, marker='o', markersize=5, color='firebrick')
+axs[0].set_xscale("log")
+axs[0].set_ylabel('coefficient error')
+axs[0].annotate(
         f'pin min: {pin_error:.3g}\nλ={opt_lbd_pin:.3g}',
         xy=(opt_lbd_pin, pin_error),
         xytext=(15, 25), textcoords='offset points',
@@ -124,34 +124,30 @@ plt.annotate(
         arrowprops=dict(arrowstyle='->', color='royalblue', lw=1)
     )
 
-plt.annotate(
+axs[0].annotate(
         f'sindy min: {sindy_error:.3g}\nλ={opt_lbd_sindy:.3g}',
         xy=(opt_lbd_sindy, sindy_error),
         xytext=(-100, 25), textcoords='offset points',
         fontsize=8, color='firebrick',
         arrowprops=dict(arrowstyle='->', color='firebrick', lw=1)
     )
-
-
-
-plt.legend()
-plt.tight_layout()
-plt.show()
+axs[0].legend()
 
 idx_max_diff = np.argmax(zetaSINDY-zetaPIN)
-plt.plot(lbd_space, zetaSINDY-zetaPIN, color="orchid", label = "sindy error - pin error")
-plt.axhline(y=0, color="black")
-plt.plot(lbd_space[idx_max_diff], (zetaSINDY-zetaPIN)[idx_max_diff], color="purple")
-plt.annotate(
+axs[1].plot(lbd_space, zetaSINDY-zetaPIN, color="orchid", label = "sindy error - pin error")
+axs[1].axhline(y=0, color="black", label="sindy error = pin error", linestyle="dashed")
+axs[1].plot(lbd_space[idx_max_diff], (zetaSINDY-zetaPIN)[idx_max_diff], color="purple")
+axs[1].annotate(
         f'maximum difference between sindy and pin-sindy: {(zetaSINDY-zetaPIN)[idx_max_diff]: .3g}',
         xy=(lbd_space[idx_max_diff], (zetaSINDY-zetaPIN)[idx_max_diff]),       # point being annotated
         xytext=(15, 15), textcoords='offset points',              # offset of text box
         fontsize=8, color='purple',
         arrowprops=dict(arrowstyle='->', color='purple', lw=1))
-plt.xlabel("lambda values")
-plt.xscale("log")
-plt.ylabel("normalized error")
-plt.legend()
+axs[1].set_xlabel("lambda values")
+axs[1].set_xscale("log")
+axs[1].set_ylabel("normalized error")
+axs[1].legend()
+plt.tight_layout()
 plt.show()
 
 if coef_error_each:
@@ -168,7 +164,7 @@ if coef_error_each:
     zeta_sindy_z_y = []
     zeta_pin_z_y = []
 
-    lbds = np.logspace(-8, -1, 100)
+    lbds = np.logspace(-4, -1, 100)
 
     for lbd in lbds:
         sindy_l = SINDY(dmethod, X, t_eval=t, t_span=t_span, u0=y0, theta_instance=theta_instance,
